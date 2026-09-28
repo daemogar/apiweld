@@ -1,4 +1,4 @@
-namespace ApiWeld.Tests;
+﻿namespace ApiWeld.Tests;
 
 public class HarnessTests
 {
