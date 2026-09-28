@@ -48,6 +48,20 @@ Union collapse replaces every `oneOf`/`anyOf` with a single, more permissive sch
 5. The property's own `title` and `description` override anything a variant carried, so a
    merged property documents itself rather than describing whichever variant happened to win.
 
+## Deduplication rules
+
+Deduplication folds every identical, referenced component schema onto one canonical name and
+rewrites references to point at it:
+
+1. Only *referenced* schemas participate. An orphan is never generated, so folding one in would
+   rename a live type after a dead one.
+2. The survivor is chosen by precedence — a response wins over a request, and the primary
+   get-response over any other — because a response is the type callers actually hold.
+3. Schemas that are merely similar are never merged. Equality is structural and exact.
+
+References are rewritten to point at the survivor; a reference to a schema that does not exist is
+left exactly as written.
+
 ## Packages
 
 | Package | What it is |
