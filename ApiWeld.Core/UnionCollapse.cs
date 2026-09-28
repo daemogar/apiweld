@@ -76,4 +76,58 @@ public static class UnionCollapse
 
 		return merged;
 	}
+
+	/// <summary>One permissive schema in place of every oneOf/anyOf in the tree.</summary>
+	public static JsonNode? Collapse(JsonNode? node)
+	{
+		if (node is JsonArray array)
+			return new JsonArray([.. array.Select(Collapse)]);
+
+		if (node is not JsonObject source)
+			return node?.DeepClone();
+
+		foreach (var keyword in new[] { "oneOf", "anyOf" })
+		{
+			if (source[keyword] is not JsonArray variants)
+				continue;
+
+			var kept = variants.Where(p => !IsAbsent(p)).ToArray();
+
+			// Whether a branch said the value may arrive blank, which is worth carrying:
+			// it makes the surviving branch's format and pattern a possibility rather
+			// than a promise.
+			var emptiable = kept.Length < variants.Count;
+
+			if (kept.Length == 0)
+			{
+				kept = [.. variants];
+				emptiable = false;
+			}
+
+			var merged = Collapse(kept[0]) as JsonObject ?? [];
+
+			foreach (var variant in kept.Skip(1))
+				merged = Merge(merged, Collapse(variant) as JsonObject ?? []);
+
+			if (emptiable && (string?)merged["type"] == "string")
+			{
+				merged.Remove("format");
+				merged.Remove("pattern");
+			}
+
+			// The property's own prose beats a variant's.
+			foreach (var prose in new[] { "title", "description" })
+				if (source[prose] is JsonNode value)
+					merged[prose] = value.DeepClone();
+
+			return merged;
+		}
+
+		JsonObject result = [];
+
+		foreach (var (name, value) in source)
+			result[name] = Collapse(value);
+
+		return result;
+	}
 }

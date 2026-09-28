@@ -37,9 +37,16 @@ Union collapse replaces every `oneOf`/`anyOf` with a single, more permissive sch
 1. Drop every *absent* branch — one with `maxProperties: 0`, an object declaring no
    properties, a string with `maxLength: 0`, or a bare nullable string carrying no `enum`
    and no `pattern`.
-2. Merge the survivors pairwise: every property either offers, only the `required` entries
+2. If nothing survives, keep all branches and treat the union as not emptiable.
+3. Merge the survivors pairwise: every property either offers, only the `required` entries
    **both** carry, and no `enum`, `pattern` or `format` that they disagree on **or that only
    one of them carries**.
+4. If any branch was dropped and the merged result is a string, drop its `format` and
+   `pattern` too. A branch saying the value may arrive blank makes the survivor's constraints
+   a possibility rather than a promise — this is the rule that keeps a timestamp typed as a
+   nullable string rather than a date.
+5. The property's own `title` and `description` override anything a variant carried, so a
+   merged property documents itself rather than describing whichever variant happened to win.
 
 ## Packages
 
