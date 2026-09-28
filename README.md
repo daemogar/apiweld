@@ -37,6 +37,9 @@ Union collapse replaces every `oneOf`/`anyOf` with a single, more permissive sch
 1. Drop every *absent* branch — one with `maxProperties: 0`, an object declaring no
    properties, a string with `maxLength: 0`, or a bare nullable string carrying no `enum`
    and no `pattern`.
+2. Merge the survivors pairwise: every property either offers, only the `required` entries
+   **both** carry, and no `enum`, `pattern` or `format` that they disagree on **or that only
+   one of them carries**.
 
 ## Packages
 
