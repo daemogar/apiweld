@@ -1,0 +1,5 @@
+<Solution>
+  <Project Path="ApiWeld.Core/ApiWeld.Core.csproj" />
+  <Project Path="ApiWeld.Cli/ApiWeld.Cli.csproj" />
+  <Project Path="ApiWeld.Tests/ApiWeld.Tests.csproj" />
+</Solution>

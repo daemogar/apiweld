@@ -1,0 +1,4 @@
+# core.autocrlf can rewrite LF to CRLF on checkout. Normalized descriptions and
+# verified snapshots are compared byte-for-byte, so their line endings are pinned.
+*.json text eol=lf
+*.verified.txt text eol=lf

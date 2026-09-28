@@ -1,0 +1,48 @@
+# Build outputs
+[Bb]in/
+[Oo]bj/
+[Bb]uild/
+[Rr]elease/
+[Rr]eleases/
+[Dd]ebug/
+[Dd]ebugPublic/
+[Ll]og/
+[Ll]ogs/
+[Aa]rtifacts/
+
+# Local IDE and editor state, not shared
+.vs/
+.idea/
+.vscode/
+*.user
+*.userosscache
+*.suo
+*.userprefs
+*.sln.iml
+
+# Test results and coverage
+[Tt]est[Rr]esult*/
+*.trx
+*.coverage
+*.coveragexml
+
+# Packages restored locally
+*.nupkg
+*.snupkg
+**/packages/*
+!**/packages/build/
+
+# Temp and backup files
+*.tmp
+*.bak
+*.swp
+*~
+
+# Local design and planning notes, deliberately untracked
+docs/
+
+# Execution workspace, scratch
+.superpowers/
+
+# Verify received files
+*.received.*
