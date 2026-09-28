@@ -30,6 +30,14 @@ surviving variant agrees on, and folds identical component schemas onto one cano
 rewriting every reference to point at it. The result is a description that describes the same
 data, with far fewer, more mappable, generated types.
 
+## Union collapse rules
+
+Union collapse replaces every `oneOf`/`anyOf` with a single, more permissive schema:
+
+1. Drop every *absent* branch — one with `maxProperties: 0`, an object declaring no
+   properties, a string with `maxLength: 0`, or a bare nullable string carrying no `enum`
+   and no `pattern`.
+
 ## Packages
 
 | Package | What it is |
