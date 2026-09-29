@@ -1,4 +1,5 @@
-﻿using System.Text.Json.Nodes;
+﻿using System.Text.Json;
+using System.Text.Json.Nodes;
 
 namespace ApiWeld.Core;
 
@@ -17,7 +18,11 @@ public static class OpenApiNormalizer
 	public static JsonObject Normalize(string documentText, string resourceName)
 	{
 		var mapped = FormatMap.Apply(documentText);
-		var collapsed = (JsonObject)UnionCollapse.Collapse(JsonNode.Parse(mapped))!;
+
+		if (JsonNode.Parse(mapped) is not JsonObject root)
+			throw new JsonException("The description's root is not a JSON object.");
+
+		var collapsed = (JsonObject)UnionCollapse.Collapse(root)!;
 
 		return SchemaDeduplicator.Deduplicate(collapsed, resourceName);
 	}

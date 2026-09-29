@@ -1,5 +1,6 @@
 ﻿using System.Reflection;
 using System.Text.Encodings.Web;
+using System.Text.Json;
 using System.Text.Json.Nodes;
 
 using ApiWeld.Core;
@@ -64,5 +65,11 @@ public class NormalizerTests
 
 		Assert.True(schemas.ContainsKey("widgets_get_response"));
 		Assert.False(schemas.ContainsKey("widgets_post_request"));
+	}
+
+	[Fact]
+	public void Rejects_a_description_whose_root_is_not_an_object()
+	{
+		Assert.Throws<JsonException>(() => OpenApiNormalizer.Normalize("[1, 2]", "widgets"));
 	}
 }

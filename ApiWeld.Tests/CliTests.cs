@@ -146,4 +146,15 @@ public class CliTests : IDisposable
 		Assert.EndsWith("}\n", produced);
 		Assert.DoesNotContain("\n\n", produced);
 	}
+
+	[Fact]
+	public void Reports_a_description_whose_root_is_not_an_object_without_throwing()
+	{
+		var path = Write("widgets.json", "[1, 2]");
+
+		var (code, _, error) = Run("normalize", path);
+
+		Assert.NotEqual(0, code);
+		Assert.Contains("widgets.json", error);
+	}
 }
