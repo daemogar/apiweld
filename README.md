@@ -30,6 +30,55 @@ surviving variant agrees on, and folds identical component schemas onto one cano
 rewriting every reference to point at it. The result is a description that describes the same
 data, with far fewer, more mappable, generated types.
 
+## Union collapse rules
+
+Union collapse replaces every `oneOf`/`anyOf` with a single, more permissive schema. The
+rules target OpenAPI 3.0 shapes — a bare nullable field written as `nullable: true` rather
+than a 3.1-style `type` array; a 3.1 type array (`"type": ["string", "null"]`) inside a
+`oneOf`/`anyOf` variant is not yet handled and is reported as an error rather than collapsed.
+
+1. Drop every *absent* branch — one with `maxProperties: 0`, an object declaring no
+   properties, a string with `maxLength: 0`, or a bare nullable string carrying no `enum`
+   and no `pattern`.
+2. If nothing survives, keep all branches and treat the union as not emptiable.
+3. Merge the survivors pairwise: a property either variant offers survives; `required`
+   intersects only when **both** variants carry a `required` list — a `required` list only
+   one variant carries is kept whole, unchanged; and no `enum`, `pattern` or `format`
+   survives that they disagree on or that only one of them carries.
+4. If any branch was dropped and the merged result is a string, drop its `format` and
+   `pattern` too. A branch saying the value may arrive blank makes the survivor's constraints
+   a possibility rather than a promise — this is the rule that keeps a timestamp typed as a
+   nullable string rather than a date.
+5. The property's own `title` and `description` override anything a variant carried, so a
+   merged property documents itself rather than describing whichever variant happened to win.
+
+## Deduplication rules
+
+Deduplication folds every identical, referenced component schema onto one canonical name and
+rewrites references to point at it:
+
+1. Only *referenced* schemas participate. An orphan is never generated, so folding one in would
+   rename a live type after a dead one.
+2. The survivor is chosen by precedence — a response wins over a request, and the primary
+   get-response over any other — because a response is the type callers actually hold.
+3. Schemas that are merely similar are never merged. Equality is structural and exact.
+
+References are rewritten to point at the survivor; a reference to a schema that does not exist is
+left exactly as written.
+
+## Order of the passes
+
+The normalizer runs its stages in a fixed order:
+
+1. **Format substitution**, on the raw document text, before anything is parsed — see
+   `CONTRIBUTING.md`, "Format substitution is text replacement."
+2. **Union collapse**.
+3. **Deduplication**.
+
+Collapse has to come before deduplication: two schemas that differ only in an absent branch are
+not structurally identical until that branch is collapsed away. Deduplicating first would compare
+them as written, find no match, and leave both in place.
+
 ## Packages
 
 | Package | What it is |
@@ -41,8 +90,11 @@ Both are licensed AGPL-3.0-or-later; see [`LICENSE.txt`](LICENSE.txt).
 
 ## Installing and running the tool
 
+Only prerelease versions have shipped so far, so `--prerelease` is required until the first
+official release:
+
 ```bash
-dotnet tool install --global ApiWeld.Cli
+dotnet tool install --global ApiWeld.Cli --prerelease
 apiweld normalize path/to/description.json
 ```
 

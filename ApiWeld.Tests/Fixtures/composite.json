@@ -1,0 +1,63 @@
+{
+  "openapi": "3.0.0",
+  "info": { "title": "Widgets", "version": "1.0.0" },
+  "paths": {
+    "/widgets": {
+      "get": {
+        "responses": {
+          "200": { "content": { "application/json": { "schema": { "$ref": "#/components/schemas/widgets_get_response" } } } }
+        }
+      },
+      "post": {
+        "requestBody": { "content": { "application/json": { "schema": { "$ref": "#/components/schemas/widgets_post_request" } } } }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "widgets_get_response": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string", "format": "guid" },
+          "contact": { "type": "string", "format": "email" },
+          "changedOn": {
+            "oneOf": [
+              { "type": "string", "maxLength": 0 },
+              { "type": "string", "nullable": true },
+              { "type": "string", "format": "date-time" }
+            ]
+          },
+          "place": {
+            "title": "Place",
+            "oneOf": [
+              { "maxProperties": 0 },
+              { "type": "object", "title": "Region A", "required": ["code", "name"], "properties": { "code": { "type": "string" }, "name": { "type": "string" } } },
+              { "type": "object", "title": "Region B", "required": ["code"], "properties": { "code": { "type": "string" }, "postal": { "type": "string" } } }
+            ]
+          }
+        }
+      },
+      "widgets_post_request": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string", "format": "guid" },
+          "contact": { "type": "string", "format": "email" },
+          "changedOn": {
+            "oneOf": [
+              { "type": "string", "maxLength": 0 },
+              { "type": "string", "format": "date-time" }
+            ]
+          },
+          "place": {
+            "title": "Place",
+            "oneOf": [
+              { "maxProperties": 0 },
+              { "type": "object", "title": "Region A", "required": ["code", "name"], "properties": { "code": { "type": "string" }, "name": { "type": "string" } } },
+              { "type": "object", "title": "Region B", "required": ["code"], "properties": { "code": { "type": "string" }, "postal": { "type": "string" } } }
+            ]
+          }
+        }
+      }
+    }
+  }
+}

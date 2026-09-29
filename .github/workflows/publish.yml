@@ -1,0 +1,159 @@
+name: Publish ApiWeld
+
+# Every push to main publishes a -beta prerelease. An official release is
+# triggered manually from the Actions tab: same pipeline, same assets, but the
+# tag has no -beta suffix and the release is not marked prerelease.
+on:
+  push:
+    branches: [ "main" ]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Official release version (plain SemVer, e.g. 1.0.0)'
+        required: true
+        default: '0.1.0'
+
+env:
+  CORE_PROJECT: ApiWeld.Core/ApiWeld.Core.csproj
+  CLI_PROJECT: ApiWeld.Cli/ApiWeld.Cli.csproj
+  NUPKG_DIR: nupkgs
+  # The next planned official release. Betas are cut as <NEXT_VERSION>-beta.<run#>
+  # so they always compare BELOW the official they precede. Keep in sync with the
+  # workflow_dispatch default above; bump both right after each official ships.
+  NEXT_VERSION: '0.1.0'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    # Declaring a permissions block drops the default grants, so list everything used:
+    #   id-token: write  -> OIDC token for NuGet trusted publishing
+    #   contents: write  -> the release action creates the release and tag
+    permissions:
+      id-token: write
+      contents: write
+
+    steps:
+    - name: Checkout Source
+      uses: actions/checkout@v7.0.1
+
+    - name: Git Fetch
+      run: git fetch --prune --unshallow
+
+    - name: Setup DotNet
+      uses: actions/setup-dotnet@v6.0.0
+      with:
+        dotnet-version: 10.0.x
+
+    - name: Restore Dependencies
+      run: dotnet restore
+
+    - name: Build
+      run: dotnet build --no-restore -c Release
+
+    - name: Test
+      run: dotnet test --no-build -c Release
+
+    - name: Set Release Version
+      id: version
+      run: |
+        if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+          VERSION="${{ inputs.version }}"
+          if ! printf '%s' "$VERSION" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$'; then
+            echo "::error::Release version '$VERSION' must be plain SemVer (MAJOR.MINOR.PATCH)."
+            exit 1
+          fi
+          PRERELEASE=false
+        else
+          VERSION="${{ env.NEXT_VERSION }}-beta.${{ github.run_number }}"
+          PRERELEASE=true
+        fi
+        echo "VERSION=$VERSION" >> "$GITHUB_ENV"
+        echo "PRERELEASE=$PRERELEASE" >> "$GITHUB_ENV"
+
+    - name: Create Release
+      uses: ncipollo/release-action@v1.21.0
+      with:
+        tag: ${{ env.VERSION }}
+        name: ${{ env.VERSION }}
+        token: ${{ secrets.GITHUB_TOKEN }}
+        draft: false
+        prerelease: ${{ env.PRERELEASE }}
+        artifactErrorsFailBuild: true
+        # A re-run after a failed push reuses the same tag; without this, the action's
+        # default (false) fails the re-run at this step because the release already exists.
+        allowUpdates: true
+
+    - name: Pack
+      env:
+        RELEASE_NOTE: https://github.com/daemogar/apiweld/releases/tag/${{ env.VERSION }}
+      run: |
+        dotnet pack "./${{ env.CORE_PROJECT }}" -c Release --include-symbols -p:SymbolPackageFormat=snupkg /p:Version=${{ env.VERSION }} /p:PackageReleaseNotes="See ${{ env.RELEASE_NOTE }}" -o "./${{ env.NUPKG_DIR }}"
+        dotnet pack "./${{ env.CLI_PROJECT }}"  -c Release --include-symbols -p:SymbolPackageFormat=snupkg /p:Version=${{ env.VERSION }} /p:PackageReleaseNotes="See ${{ env.RELEASE_NOTE }}" -o "./${{ env.NUPKG_DIR }}"
+
+    # Trusted publishing: exchange the OIDC token for a short-lived (1-hour)
+    # nuget.org key. Requested immediately before the push so it is fresh.
+    - name: NuGet login (OIDC to temp API key)
+      uses: NuGet/login@v1
+      id: login
+      with:
+        user: ${{ secrets.NUGET_USER }}
+
+    - name: Push NuGet
+      run: dotnet nuget push "./${{ env.NUPKG_DIR }}/*.nupkg" --api-key ${{ steps.login.outputs.NUGET_API_KEY }} --source https://api.nuget.org/v3/index.json
+
+    # Leave all stable releases listed, plus the single newest beta only while its
+    # base version outranks every stable. Non-fatal: publishing is the critical
+    # path and a cleanup hiccup must never fail a release. The policy grants the
+    # unlist scope, so the same temporary key can do this.
+    - name: Unlist superseded pre-releases
+      continue-on-error: true
+      env:
+        API_KEY: ${{ steps.login.outputs.NUGET_API_KEY }}
+        JUST_PUBLISHED: ${{ env.VERSION }}
+      run: |
+        set -u
+        SOURCE="https://api.nuget.org/v3/index.json"
+
+        for PKG in "ApiWeld.Core" "ApiWeld.Cli"; do
+        PKG_LC="${PKG,,}"
+        echo "-- Checking $PKG --"
+
+        versions=$(curl -fsS "https://azuresearch-usnc.nuget.org/query?q=packageid:${PKG_LC}&prerelease=true&semVerLevel=2.0.0" \
+          | jq -r --arg id "$PKG_LC" '.data[]? | select((.id | ascii_downcase) == $id) | .versions[].version')
+
+        if [ -z "$versions" ]; then
+          echo "No listed versions returned for $PKG. Nothing to clean up."
+          continue
+        fi
+
+        max_stable=$(printf '%s\n' $versions | grep -E '^[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -1 || true)
+
+        # Fold in THIS run's version: the search index lags a fresh push, so without
+        # it the previous beta is mistaken for the newest and never unlisted.
+        candidate=$( { printf '%s\n' $versions; printf '%s\n' "$JUST_PUBLISHED"; } \
+          | grep -E '^[0-9]+\.[0-9]+\.[0-9]+-beta\.[0-9]+$' \
+          | awk -F'-beta[.]' '{print $2" "$0}' | sort -n | tail -1 | awk '{print $2}' || true)
+
+        keep_candidate=""
+        if [ -n "$candidate" ]; then
+          cand_base="${candidate%%-beta.*}"
+          if [ -z "$max_stable" ]; then
+            keep_candidate="$candidate"
+          else
+            higher=$(printf '%s\n%s\n' "$cand_base" "$max_stable" | sort -V | tail -1)
+            if [ "$higher" = "$cand_base" ] && [ "$cand_base" != "$max_stable" ]; then
+              keep_candidate="$candidate"
+            fi
+          fi
+        fi
+
+        for v in $versions; do
+          case "$v" in *-*) ;; *) continue ;; esac
+          [ "$v" = "$keep_candidate" ] && continue
+          [ "$v" = "$JUST_PUBLISHED" ] && continue
+          echo "Unlisting $PKG $v"
+          dotnet nuget delete "$PKG" "$v" --non-interactive --api-key "$API_KEY" --source "$SOURCE" \
+            || echo "::warning::Failed to unlist $PKG $v (continuing)."
+        done
+        done
