@@ -80,6 +80,9 @@ jobs:
         draft: false
         prerelease: ${{ env.PRERELEASE }}
         artifactErrorsFailBuild: true
+        # A re-run after a failed push reuses the same tag; without this, the action's
+        # default (false) fails the re-run at this step because the release already exists.
+        allowUpdates: true
 
     - name: Pack
       env:
