@@ -1,0 +1,73 @@
+﻿{
+  "openapi": "3.0.0",
+  "info": {
+    "title": "Widgets",
+    "version": "1.0.0"
+  },
+  "paths": {
+    "/widgets": {
+      "get": {
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/widgets_get_response"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/widgets_get_response"
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "widgets_get_response": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "contact": {
+            "type": "string",
+            "format": "string"
+          },
+          "changedOn": {
+            "type": "string"
+          },
+          "place": {
+            "type": "object",
+            "title": "Place",
+            "required": [
+              "code"
+            ],
+            "properties": {
+              "code": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "postal": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

@@ -62,6 +62,19 @@ rewrites references to point at it:
 References are rewritten to point at the survivor; a reference to a schema that does not exist is
 left exactly as written.
 
+## Order of the passes
+
+The normalizer runs its stages in a fixed order:
+
+1. **Format substitution**, on the raw document text, before anything is parsed — see
+   `CONTRIBUTING.md`, "Format substitution is text replacement."
+2. **Union collapse**.
+3. **Deduplication**.
+
+Collapse has to come before deduplication: two schemas that differ only in an absent branch are
+not structurally identical until that branch is collapsed away. Deduplicating first would compare
+them as written, find no match, and leave both in place.
+
 ## Packages
 
 | Package | What it is |
