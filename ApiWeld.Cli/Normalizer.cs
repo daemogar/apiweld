@@ -11,6 +11,10 @@ public static class Normalizer
 {
 	const string Usage = "usage: apiweld normalize <path-to-description.json>";
 
+	// Mirrors the message OpenApiNormalizer throws for a non-object root, so a genuine
+	// JSON syntax error and a validly-parsed but wrongly-shaped root report differently.
+	const string RootNotObjectMessage = "The description's root is not a JSON object.";
+
 	/// <summary>Pinned to LF with a trailing newline so identical input writes identical bytes on every OS.</summary>
 	static readonly JsonSerializerOptions Output = new()
 	{
@@ -42,7 +46,18 @@ public static class Normalizer
 
 		var file = new FileInfo(path);
 		var name = Path.GetFileNameWithoutExtension(file.Name);
-		var text = File.ReadAllText(file.FullName);
+
+		string text;
+
+		try
+		{
+			text = File.ReadAllText(file.FullName);
+		}
+		catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+		{
+			error.WriteLine($"{file.Name}: could not read — {exception.Message}");
+			return 1;
+		}
 
 		JsonObject normalized;
 
@@ -52,20 +67,40 @@ public static class Normalizer
 		}
 		catch (JsonException exception)
 		{
-			error.WriteLine($"{file.Name}: not valid JSON — {exception.Message}");
+			var prefix = exception.Message == RootNotObjectMessage ? "cannot normalize" : "not valid JSON";
+			error.WriteLine($"{file.Name}: {prefix} — {exception.Message}");
 			return 1;
 		}
+		catch (Exception exception)
+		{
+			error.WriteLine($"{file.Name}: could not normalize — {exception.Message}");
+			return 1;
+		}
+
+		var target = Path.Combine(file.DirectoryName!, $"{name}.modified.json");
 
 		// Compared against the document as written, not against the format-mapped text,
 		// so a substitution alone is still a change worth writing.
 		if (JsonNode.DeepEquals(JsonNode.Parse(text), normalized))
 		{
 			output.WriteLine($"{name}: unchanged — nothing written.");
+
+			if (File.Exists(target))
+				error.WriteLine($"{Path.GetFileName(target)}: stale — {name}.json now normalizes to itself");
+
 			return 0;
 		}
 
-		var target = Path.Combine(file.DirectoryName!, $"{name}.modified.json");
-		File.WriteAllText(target, normalized.ToJsonString(Output) + "\n");
+		try
+		{
+			File.WriteAllText(target, normalized.ToJsonString(Output) + "\n");
+		}
+		catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+		{
+			error.WriteLine($"{Path.GetFileName(target)}: could not write — {exception.Message}");
+			return 1;
+		}
+
 		output.WriteLine($"{name}: wrote {Path.GetFileName(target)}.");
 
 		return 0;

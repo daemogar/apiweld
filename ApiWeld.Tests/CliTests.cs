@@ -157,4 +157,77 @@ public class CliTests : IDisposable
 		Assert.NotEqual(0, code);
 		Assert.Contains("widgets.json", error);
 	}
+
+	// Review Focus 2. A directory named "<name>.modified.json" makes the write target
+	// unwritable on every OS, portably — no file permission bits to fiddle with.
+	[Fact]
+	public void Reports_an_unwritable_output_without_throwing()
+	{
+		var path = Write("widgets.json", """
+			{ "components": { "schemas": { "a": { "type": "string", "format": "guid" } } } }
+			""");
+
+		Directory.CreateDirectory(Path.Combine(folder, "widgets.modified.json"));
+
+		var (code, _, error) = Run("normalize", path);
+
+		Assert.NotEqual(0, code);
+		Assert.Contains("widgets.modified.json", error);
+	}
+
+	// Review Focus 2. Confirmed directly against OpenApiNormalizer.Normalize before writing
+	// this test: a oneOf variant using an OpenAPI 3.1 type array (`"type": ["string", "null"]`)
+	// throws InvalidOperationException from inside IsAbsent's `(string?)schema["type"]` cast,
+	// not a JsonException — this is the shape the CLI must catch and report rather than throw.
+	[Fact]
+	public void Reports_a_description_it_cannot_normalize_without_throwing()
+	{
+		var path = Write("widgets.json", """
+			{
+			  "components": {
+			    "schemas": {
+			      "a": {
+			        "oneOf": [
+			          { "type": ["string", "null"] },
+			          { "type": "object", "properties": { "x": { "type": "string" } } }
+			        ]
+			      }
+			    }
+			  }
+			}
+			""");
+
+		var (code, _, error) = Run("normalize", path);
+
+		Assert.NotEqual(0, code);
+		Assert.Contains("widgets.json", error);
+	}
+
+	// Review Focus 7. A previous run's output survives even though the input now
+	// normalizes to itself; the CLI warns rather than silently leaving it stale.
+	[Fact]
+	public void Warns_about_a_stale_modified_file_when_normalization_is_a_no_op()
+	{
+		var path = Write("widgets.json", """
+			{
+			  "components": {
+			    "schemas": {
+			      "a": {
+			        "type": "string"
+			      }
+			    }
+			  }
+			}
+			""");
+
+		Write("widgets.modified.json", "{}");
+
+		var (code, output, error) = Run("normalize", path);
+
+		Assert.Equal(0, code);
+		Assert.Contains("unchanged", output);
+		Assert.Contains("widgets.modified.json", error);
+		Assert.Contains("stale", error);
+		Assert.True(File.Exists(Path.Combine(folder, "widgets.modified.json")));
+	}
 }
