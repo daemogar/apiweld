@@ -1,2 +1,3 @@
-﻿Console.Error.WriteLine("usage: apiweld normalize <path-to-description.json>");
-return 1;
+﻿using ApiWeld.Cli;
+
+return Normalizer.Run(args, Console.Out, Console.Error);
