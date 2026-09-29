@@ -32,15 +32,19 @@ data, with far fewer, more mappable, generated types.
 
 ## Union collapse rules
 
-Union collapse replaces every `oneOf`/`anyOf` with a single, more permissive schema:
+Union collapse replaces every `oneOf`/`anyOf` with a single, more permissive schema. The
+rules target OpenAPI 3.0 shapes — a bare nullable field written as `nullable: true` rather
+than a 3.1-style `type` array; a 3.1 type array (`"type": ["string", "null"]`) inside a
+`oneOf`/`anyOf` variant is not yet handled and is reported as an error rather than collapsed.
 
 1. Drop every *absent* branch — one with `maxProperties: 0`, an object declaring no
    properties, a string with `maxLength: 0`, or a bare nullable string carrying no `enum`
    and no `pattern`.
 2. If nothing survives, keep all branches and treat the union as not emptiable.
-3. Merge the survivors pairwise: every property either offers, only the `required` entries
-   **both** carry, and no `enum`, `pattern` or `format` that they disagree on **or that only
-   one of them carries**.
+3. Merge the survivors pairwise: a property either variant offers survives; `required`
+   intersects only when **both** variants carry a `required` list — a `required` list only
+   one variant carries is kept whole, unchanged; and no `enum`, `pattern` or `format`
+   survives that they disagree on or that only one of them carries.
 4. If any branch was dropped and the merged result is a string, drop its `format` and
    `pattern` too. A branch saying the value may arrive blank makes the survivor's constraints
    a possibility rather than a promise — this is the rule that keeps a timestamp typed as a
@@ -86,8 +90,11 @@ Both are licensed AGPL-3.0-or-later; see [`LICENSE.txt`](LICENSE.txt).
 
 ## Installing and running the tool
 
+Only prerelease versions have shipped so far, so `--prerelease` is required until the first
+official release:
+
 ```bash
-dotnet tool install --global ApiWeld.Cli
+dotnet tool install --global ApiWeld.Cli --prerelease
 apiweld normalize path/to/description.json
 ```
 

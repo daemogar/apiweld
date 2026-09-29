@@ -122,4 +122,17 @@ public class MergeTests
 
 		Assert.Equal("#/components/schemas/Left", (string?)merged["$ref"]);
 	}
+
+	// Review Focus 4. `required` intersects only when BOTH variants carry it; a list
+	// only one variant carries survives whole, in either operand order. Pinned so the
+	// behaviour is visible; changing it is a deliberate act with a failing test.
+	[Fact]
+	public void Keeps_a_required_list_only_one_variant_carries()
+	{
+		var leftCarries = Merge("""{ "required": ["a"] }""", """{}""");
+		var rightCarries = Merge("""{}""", """{ "required": ["a"] }""");
+
+		Assert.Equal(["a"], ((JsonArray)leftCarries["required"]!).Select(p => (string?)p));
+		Assert.Equal(["a"], ((JsonArray)rightCarries["required"]!).Select(p => (string?)p));
+	}
 }
