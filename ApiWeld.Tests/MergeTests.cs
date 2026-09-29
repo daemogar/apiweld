@@ -56,6 +56,16 @@ public class MergeTests
 	}
 
 	[Fact]
+	public void Drops_an_enum_only_one_variant_carries()
+	{
+		var merged = Merge(
+			"""{ "type": "string", "enum": ["a"] }""",
+			"""{ "type": "string" }""");
+
+		Assert.False(merged.ContainsKey("enum"));
+	}
+
+	[Fact]
 	public void Drops_a_pattern_only_one_variant_carries()
 	{
 		var merged = Merge(
