@@ -24,6 +24,7 @@ public class NormalizerTests
 		=> node.ToJsonString(new()
 		{
 			WriteIndented = true,
+			NewLine = "\n",
 			Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping
 		});
 
