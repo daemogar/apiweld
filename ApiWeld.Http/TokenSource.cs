@@ -19,8 +19,10 @@ public sealed class TokenSource(TokenExchangeOptions options, HttpClient exchang
 
 		try
 		{
-			if (token is not null && clock.GetUtcNow() < refreshAt)
-				return token;
+			var cached = Volatile.Read(ref token);
+
+			if (cached is not null && clock.GetUtcNow() < refreshAt)
+				return cached;
 
 			var fresh = await ExchangeAsync(cancellationToken).ConfigureAwait(false);
 			var now = clock.GetUtcNow();
@@ -28,7 +30,7 @@ public sealed class TokenSource(TokenExchangeOptions options, HttpClient exchang
 			refreshAt = JwtExpiry.Read(fresh) is { } expires
 				? expires - options.RefreshMargin
 				: now + options.FallbackLifetime;
-			token = fresh;
+			Volatile.Write(ref token, fresh);
 
 			return fresh;
 		}
@@ -39,20 +41,7 @@ public sealed class TokenSource(TokenExchangeOptions options, HttpClient exchang
 	}
 
 	/// <summary>Drops <paramref name="stale"/> if it is still the cached token, so the next call exchanges again.</summary>
-	public void Invalidate(string stale)
-	{
-		gate.Wait();
-
-		try
-		{
-			if (token == stale)
-				token = null;
-		}
-		finally
-		{
-			gate.Release();
-		}
-	}
+	public void Invalidate(string stale) => Interlocked.CompareExchange(ref token, null, stale);
 
 	async Task<string> ExchangeAsync(CancellationToken cancellationToken)
 	{

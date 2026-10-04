@@ -14,6 +14,28 @@ public class TokenExchangeTests
 		public override DateTimeOffset GetUtcNow() => Now;
 	}
 
+	/// <summary>Content that can be serialized once, like a request body streamed to a socket.</summary>
+	sealed class OneShotContent(string text) : HttpContent
+	{
+		bool used;
+
+		protected override async Task SerializeToStreamAsync(Stream stream, TransportContext? context)
+		{
+			if (used)
+				throw new InvalidOperationException("The content was already sent once.");
+
+			used = true;
+			await stream.WriteAsync(Encoding.UTF8.GetBytes(text));
+		}
+
+		protected override bool TryComputeLength(out long length)
+		{
+			length = 0;
+
+			return false;
+		}
+	}
+
 	static readonly DateTimeOffset Start = new(2026, 9, 29, 12, 0, 0, TimeSpan.Zero);
 
 	static string Base64Url(string json) => Convert.ToBase64String(Encoding.UTF8.GetBytes(json)).TrimEnd('=').Replace('+', '-').Replace('/', '_');
@@ -104,7 +126,7 @@ public class TokenExchangeTests
 	{
 		var (client, exchange, data, _) = Setup(["token-1", "token-2"], [HttpStatusCode.Unauthorized, HttpStatusCode.OK]);
 
-		var response = await client.PostAsync("api/widgets", new StringContent("{\"name\":\"w\"}"), TestContext.Current.CancellationToken);
+		var response = await client.PostAsync("api/widgets", new OneShotContent("{\"name\":\"w\"}"), TestContext.Current.CancellationToken);
 
 		Assert.Equal(HttpStatusCode.OK, response.StatusCode);
 		Assert.Equal(2, exchange.Requests.Count);
