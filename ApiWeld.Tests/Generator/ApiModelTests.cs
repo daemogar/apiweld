@@ -60,6 +60,32 @@ public class ApiModelTests
 		Assert.Equal("id", item.ParameterName);
 		Assert.Equal("string", item.ParameterType);
 		Assert.Contains(diagnostics, d => d.Severity == Severity.Warning && d.Message.Contains("{widgetId}"));
+		Assert.DoesNotContain(diagnostics, d => d.Severity == Severity.Error);
+		Assert.Equal(new[] { "{}" }, Descriptions.Node(model, "widgets").Children.Keys);
+	}
+
+	[Fact]
+	public void Gives_a_digit_leading_segment_a_valid_class_base()
+	{
+		var (model, _) = Descriptions.Build(Plain, ("models.json", Descriptions.Document(
+			$$"""{ "/api/3d-models": { "get": {{Descriptions.Returns(V1, Descriptions.Things)}} } }""")));
+
+		Assert.Equal("_3DModels", Descriptions.Node(model, "3d-models").ClassBase);
+	}
+
+	[Fact]
+	public void Warns_about_each_operation_under_an_unsupported_verb()
+	{
+		const string bare = """{ "responses": { "200": { "description": "Fine." } } }""";
+
+		var (model, diagnostics) = Descriptions.Build(Plain, ("things.json", Descriptions.Document($$"""
+			{ "/api/things": { "get": {{Descriptions.Returns(V1, Descriptions.Things)}}, "head": {{bare}}, "options": {{bare}}, "trace": {{bare}} } }
+			""")));
+
+		foreach (var verb in new[] { "HEAD", "OPTIONS", "TRACE" })
+			Assert.Single(diagnostics, d => d.Severity == Severity.Warning && d.Message.Contains("things.json") && d.Message.Contains($"{verb} /api/things"));
+
+		Assert.Equal(new[] { "Get" }, Descriptions.Node(model, "things").Versions["V1"].Select(o => o.Method));
 	}
 
 	[Fact]

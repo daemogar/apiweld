@@ -20,7 +20,7 @@ internal sealed class PathNode(string segment, bool isParameter, PathNode? paren
 	public SortedDictionary<string, List<OperationModel>> Versions { get; } = new(StringComparer.Ordinal);
 
 	/// <summary>The stem of this node's generated class names: segments in PascalCase, parameters as <c>Item</c>.</summary>
-	public string ClassBase => Parent is null ? "" : Parent.ClassBase + (IsParameter ? "Item" : Words.Pascal(Segment));
+	public string ClassBase => Parent is null ? "" : Parent.ClassBase + (IsParameter ? "Item" : Words.Identifier(Words.Pascal(Segment)).TrimStart('@'));
 
 	/// <summary>The path as a reader would write it, after base paths are removed.</summary>
 	public string Display => Parent is null ? "" : Parent.Display + "/" + (IsParameter ? "{" + ParameterName + "}" : Segment);

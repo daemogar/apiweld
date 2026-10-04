@@ -11,6 +11,8 @@ internal sealed class ApiModelBuilder
 {
 	static readonly string[] Methods = ["get", "put", "post", "delete", "patch"];
 
+	static readonly string[] Unsupported = ["head", "options", "trace"];
+
 	readonly Manifest manifest;
 	readonly DiagnosticBag diagnostics;
 	readonly ShapeBuilder shapes;
@@ -66,6 +68,10 @@ internal sealed class ApiModelBuilder
 			from method in Methods
 			where item[method] is JsonObject
 			select (Path: path.Key, Item: item, Method: method, Operation: (JsonObject)item[method]!)).ToList();
+
+		foreach (var path in paths.OrderBy(path => path.Key, StringComparer.Ordinal))
+			foreach (var method in Unsupported.Where(method => References.Resolve(path.Value, document).Node?[method] is JsonObject))
+				diagnostics.Warn($"{file}: {method.ToUpperInvariant()} {path.Key} is not supported and is skipped.");
 
 		var versions = operations
 			.Select(operation => MediaTypes.Pick(Success(operation.Operation, document)?["content"]))
