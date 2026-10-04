@@ -115,6 +115,32 @@ generated code calls the `ApiWeld.Http` runtime (see "The runtime").
 The manifest holds no version settings. Versions come from the descriptions and are chosen in
 code, at every call site.
 
+### Paths and versions
+
+Every path from every description goes into one tree. Base paths listed in the manifest are
+dropped first, and paths that meet once they are dropped merge into one node, so `/api/lookups`
+and `/query/lookups` both become `Api.Lookups`. A path parameter is the same node whatever each
+description calls it: `/widgets/{id}` and `/widgets/{widgetId}/parts` share one indexer, leading
+to `Api.Widgets[id].Parts`. The indexer takes a `Guid` when every description declares a UUID
+there, and a `string` otherwise (with a warning when they disagree). The same verb at the same
+version on one merged path is an error.
+
+An operation's version is read from the media type of its success response — never from the
+description's `info.version`, which is only reported when it disagrees. When a response
+declares several media types, the most specific versioned JSON type wins over plain
+`application/json`. The version member sits just before the verbs:
+`Api.Widgets[id].V2.GetAsync()`. An operation whose success response carries no versioned media
+type is `V0`; one with no response body at all takes the single version the rest of its
+description uses, if there is exactly one. A request body and the error bodies keep their own
+media types inside their operation, and never create members of their own.
+
+Several files for one resource at different versions generate side-by-side members. Removing a
+file removes its member, so every call site that named it stops compiling — which is how a
+version change is noticed, and then made, by hand.
+
+`Accept` and `Content-Type` header parameters are absorbed into the operation; any other header
+parameter becomes a property on the operation's query object.
+
 ## The runtime
 
 `ApiWeld.Http` is the package generated clients reference. Generated code describes each
