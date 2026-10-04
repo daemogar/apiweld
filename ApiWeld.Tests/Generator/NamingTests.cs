@@ -75,6 +75,23 @@ public class NamingTests
 	}
 
 	[Fact]
+	public void Lets_a_shape_a_get_also_returns_keep_the_plain_name_whatever_the_order()
+	{
+		const string shared = """{ "type": "object", "properties": { "name": { "type": "string" } } }""";
+		const string other = """{ "type": "object", "properties": { "id": { "type": "string" } } }""";
+		const string media = "application/vnd.example.v1+json";
+
+		var (model, _) = Descriptions.Resolve(Plain, ("things.json", Descriptions.Document($$"""
+			{ "/api/things": { "post": {{Descriptions.Returns(media, shared)}} },
+			  "/api/things/{id}": { "get": {{Descriptions.Returns(media, shared)}} },
+			  "/api/zeta": { "put": {{Descriptions.Returns(media, other)}} } }
+			""", version: "1")));
+
+		Assert.Equal(new[] { "ThingV1PutResponse", "ThingV1Response" }, Names(model));
+		Assert.Equal("ThingV1Response", model.Models.Single(m => m.Properties.Any(p => p.JsonName == "name")).Name);
+	}
+
+	[Fact]
 	public void Refuses_a_clash_the_verb_cannot_settle()
 	{
 		static string Shape(string field) => $$"""{ "type": "object", "properties": { "{{field}}": { "type": "string" } } }""";
