@@ -94,6 +94,22 @@ parts, so `v15`, `v15.0` and `v15.0.0` all read as `15`. A generated client name
 member after that normalized form: `12.6` becomes `V12_6`, and an operation with no versioned
 media type is `V0`.
 
+### Tolerant JSON
+
+Descriptions and servers do not always agree on a value's JSON kind: a field declared as a string
+may arrive as a number, and a number may arrive as text. A strict reader either throws or, worse,
+silently drops the value. The runtime's serializer options coerce instead:
+
+- A JSON number or boolean read into a string yields its raw JSON text — `2026`, `1.50`, `true`.
+- JSON text read into a number or boolean is parsed with the invariant culture; text that does
+  not parse becomes `null`.
+- Property names stay case-sensitive, so a field the description misnames is not quietly matched
+  to the wrong property; it lands in the model's `AdditionalData`, where it can be seen.
+
+String enums are generated as *extensible* enums — a small struct with one static member per
+known value. A value the description did not list still deserializes, keeping its text, so a
+server adding a new value never breaks an existing client.
+
 ## Packages
 
 | Package | What it is |
