@@ -7,6 +7,7 @@ internal sealed class ShapeBuilder(DiagnosticBag diagnostics, IReadOnlyDictionar
 {
 	readonly Dictionary<string, ModelType> models = new(StringComparer.Ordinal);
 	readonly Stack<string> resolving = new();
+	readonly HashSet<JsonObject> active = new(ReferenceEqualityComparer.Instance);
 
 	public IEnumerable<ModelType> Models => models.Values;
 
@@ -29,21 +30,30 @@ internal sealed class ShapeBuilder(DiagnosticBag diagnostics, IReadOnlyDictionar
 	{
 		var (node, component) = References.Resolve(schema, document);
 
-		if (component is null)
-			return Resolved(node, document, context);
-
-		if (resolving.Contains(component))
+		if (component is not null && resolving.Contains(component))
 		{
 			diagnostics.Warn($"{context.Source}: schema {component} refers to itself; the recursive property is typed as JsonElement.");
 			return ScalarRef.Json;
 		}
 
-		if (names.TryGetValue(component, out var renamed))
-			context = context.Rebase(renamed);
-		else if (context.ErrorRoot)
-			context = context.Rebase(Words.Pascal(component));
+		if (node is not null && active.Contains(node))
+		{
+			diagnostics.Warn($"{context.Source}: {context.Candidate().Plain} refers to itself; the recursive property is typed as JsonElement.");
+			return ScalarRef.Json;
+		}
 
-		resolving.Push(component);
+		if (component is not null)
+		{
+			if (names.TryGetValue(component, out var renamed))
+				context = context.Rebase(renamed);
+			else if (context.ErrorRoot)
+				context = context.Rebase(Words.Pascal(component));
+
+			resolving.Push(component);
+		}
+
+		if (node is not null)
+			active.Add(node);
 
 		try
 		{
@@ -51,7 +61,11 @@ internal sealed class ShapeBuilder(DiagnosticBag diagnostics, IReadOnlyDictionar
 		}
 		finally
 		{
-			resolving.Pop();
+			if (node is not null)
+				active.Remove(node);
+
+			if (component is not null)
+				resolving.Pop();
 		}
 	}
 
@@ -102,7 +116,7 @@ internal sealed class ShapeBuilder(DiagnosticBag diagnostics, IReadOnlyDictionar
 				required.Contains(property.Key)))
 			.ToList();
 
-		var key = "{" + string.Join(",", built.OrderBy(p => p.JsonName, StringComparer.Ordinal).Select(p => p.JsonName + ":" + Key(p.Type))) + "}";
+		var key = "{" + string.Join(",", built.OrderBy(p => p.JsonName, StringComparer.Ordinal).Select(p => Quote(p.JsonName) + ":" + Key(p.Type))) + "}";
 
 		return new ModelRef(Intern(key, ModelKind.Object, context, model =>
 		{
@@ -122,7 +136,7 @@ internal sealed class ShapeBuilder(DiagnosticBag diagnostics, IReadOnlyDictionar
 		if (list.Count == 0)
 			return ScalarRef.String;
 
-		return new ModelRef(Intern("enum[" + string.Join("|", list) + "]", ModelKind.Enum, context, model =>
+		return new ModelRef(Intern("enum[" + string.Join(",", list.Order(StringComparer.Ordinal).Select(Quote)) + "]",ModelKind.Enum, context, model =>
 		{
 			model.EnumValues.AddRange(list);
 			model.Summary = JsonText.String(node, "description");
@@ -150,6 +164,8 @@ internal sealed class ShapeBuilder(DiagnosticBag diagnostics, IReadOnlyDictionar
 
 	static string? Description(JsonNode? schema, JsonObject document)
 		=> JsonText.String(schema, "description") ?? JsonText.String(References.Resolve(schema, document).Node, "description");
+
+	static string Quote(string text) => System.Text.Json.JsonSerializer.Serialize(text);
 
 	static string Key(TypeRef type) => type switch
 	{

@@ -97,6 +97,49 @@ public class ShapeTests
 	}
 
 	[Fact]
+	public void Keeps_shapes_apart_whose_names_or_values_mimic_the_key_syntax()
+	{
+		var shapes = Builder().Shapes;
+
+		Build(shapes, """{ "type": "object", "properties": { "a": { "type": "string" }, "b": { "type": "string" } } }""");
+		Build(shapes, """{ "type": "object", "properties": { "a:string,\"b": { "type": "string" } } }""");
+		Build(shapes, """{ "type": "string", "enum": ["a", "b"] }""");
+		Build(shapes, """{ "type": "string", "enum": ["a|b"] }""");
+		Build(shapes, """{ "type": "string", "enum": ["a\",\"b"] }""");
+
+		Assert.Equal(5, shapes.Models.Count());
+	}
+
+	[Fact]
+	public void Merges_enums_listing_the_same_values_in_a_different_order()
+	{
+		var shapes = Builder().Shapes;
+
+		var first = Model(Build(shapes, """{ "type": "string", "enum": ["active", "retired"] }"""));
+		var second = Model(Build(shapes, """{ "type": "string", "enum": ["retired", "active"] }"""));
+
+		Assert.Same(first, second);
+		Assert.Equal(new[] { "active", "retired" }, first.EnumValues);
+	}
+
+	[Fact]
+	public void Types_an_interior_self_reference_as_json_and_warns()
+	{
+		var document = (JsonObject)JsonNode.Parse("""
+			{ "components": { "schemas": { "a": { "type": "object", "properties": {
+				"self": { "type": "object", "properties": {
+					"again": { "$ref": "#/components/schemas/a/properties/self" } } } } } } } }
+			""")!;
+		var (shapes, diagnostics) = Builder();
+
+		var a = Model(shapes.Build(JsonNode.Parse("""{ "$ref": "#/components/schemas/a" }"""), document, Context()));
+		var self = Model(a.Properties.Single().Type);
+
+		Assert.Equal(ScalarRef.Json, self.Properties.Single().Type);
+		Assert.Contains(diagnostics.Items, d => d.Message.Contains("refers to itself"));
+	}
+
+	[Fact]
 	public void Builds_a_string_enum_as_an_enum_model()
 	{
 		var model = Model(Build(Builder().Shapes, """{ "type": "string", "enum": ["active", "retired", null] }"""));
