@@ -141,6 +141,36 @@ version change is noticed, and then made, by hand.
 `Accept` and `Content-Type` header parameters are absorbed into the operation; any other header
 parameter becomes a property on the operation's query object.
 
+### Names
+
+A generated type is named `{Root}{Version}{Path}{Suffix}`:
+
+- **Root** — the description's file name in PascalCase with its last word made singular:
+  `academic-disciplines` becomes `AcademicDiscipline`. (`-ies` becomes `-y`; `-sses`, `-xes`,
+  `-ches`, `-shes` and `-uses` drop `-es`; otherwise a trailing `-s` is dropped unless the word
+  ends `-ss`, `-us` or `-is`.)
+- **Version** — the version member, such as `V12_6`.
+- **Path** — the property path from the body, with array items singular: `addresses[].place`
+  becomes `AddressPlace`.
+- **Suffix** — always `Response` or `Request`, so a name does not change when a description
+  starts or stops sharing a shape between the two. Error bodies have no suffix; they are named
+  after their schema and the error media type's version, such as `ErrorsV2`.
+
+Types merge when their shape and direction are identical, across files as well as within one,
+and a merged type takes its shortest candidate name, ties broken in ordinal order. When
+different shapes want one name, the one a GET returns keeps it and the others gain their verb
+after the version (`ThingV1PostResponse`), with a warning; a clash that survives that is an
+error naming the fix.
+
+`names` in the manifest overrides a base name. A description's file stem replaces its Root; a
+component schema's name replaces the base of the type built from it, and the types nested under
+it are named from the override.
+
+Properties are PascalCase with their JSON names kept in `[JsonPropertyName]`; every property is
+nullable, and `required` is recorded in the property's summary only. Every model is a `partial`
+class with settable properties and an `AdditionalData` dictionary for fields the description
+does not declare. String enums become extensible enums (see "Tolerant JSON").
+
 ## The runtime
 
 `ApiWeld.Http` is the package generated clients reference. Generated code describes each

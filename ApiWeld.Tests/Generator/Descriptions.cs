@@ -29,6 +29,15 @@ static class Descriptions
 		return (model, diagnostics.Items);
 	}
 
+	public static (ApiModel Model, IReadOnlyList<Diagnostic> Diagnostics) Resolve(Manifest manifest, params (string File, string Json)[] documents)
+	{
+		var diagnostics = new DiagnosticBag();
+		var model = ApiModelBuilder.Build(manifest, documents.Select(d => new DescriptionSource(d.File, d.Json)), diagnostics);
+		NameResolver.Resolve(model.Models, manifest.Client, diagnostics);
+
+		return (model, diagnostics.Items);
+	}
+
 	public static PathNode Node(ApiModel model, params string[] keys) => keys.Aggregate(model.Root, (node, key) => node.Children[key]);
 
 	public static OperationModel Operation(PathNode node, string member, string method) => node.Versions[member].Single(o => o.Method == method);
