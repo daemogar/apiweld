@@ -110,6 +110,19 @@ String enums are generated as *extensible* enums — a small struct with one sta
 known value. A value the description did not list still deserializes, keeping its text, so a
 server adding a new value never breaks an existing client.
 
+### Version checking
+
+Every generated operation asks for exactly one version: its `Accept` header is the versioned
+success media type plus the operation's error media types, never a bare `application/json` that
+would let the server pick. When a success response's `Content-Type` carries a *different*
+version, the runtime throws `MediaTypeMismatchException` naming both, rather than reading a
+payload the models were not generated for. A response that names no version is read as normal.
+Setting `VersionMismatch` to `Warn` logs a warning instead of throwing.
+
+A non-2xx response throws `ApiResponseException`. When the description declares a body for that
+status, the exception is the generic `ApiResponseException<TError>` with the body read into
+`Error`; either way the raw body, status, method, URL template and requested version are kept.
+
 ## Packages
 
 | Package | What it is |
