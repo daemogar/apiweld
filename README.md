@@ -123,6 +123,23 @@ A non-2xx response throws `ApiResponseException`. When the description declares 
 status, the exception is the generic `ApiResponseException<TError>` with the body read into
 `Error`; either way the raw body, status, method, URL template and requested version are kept.
 
+### Page walking
+
+An operation is paged when it returns a list and takes both an offset and a limit parameter
+(named by the manifest's `paging` settings). Its `GetAsync` returns every row, `EnumerateAsync`
+streams rows as pages arrive, and `GetPagedAsync` returns one `Page<T>` whose `NextAsync`
+fetches the page after it. The walk starts at offset zero and:
+
+1. **stops after the first page when the response has no total-count header** — the page is
+   returned as a normal response, and `Page<T>.HasMore` is false;
+2. otherwise keeps requesting until the rows fetched reach the total, or a page comes back empty;
+3. **throws** when a page is identical to the one before it, because that means the server is
+   ignoring the offset and the walk would never end.
+
+There is no request cap: a large result set is never cut short, and the repeat guard is what
+stops a runaway walk. `limit` stays on the query object and acts as the page size; the offset is
+owned by the walk and does not appear there.
+
 ## Packages
 
 | Package | What it is |
