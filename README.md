@@ -79,6 +79,42 @@ Collapse has to come before deduplication: two schemas that differ only in an ab
 not structurally identical until that branch is collapsed away. Deduplicating first would compare
 them as written, find no match, and leave both in place.
 
+## Generating a client
+
+`apiweld generate` turns one or more OpenAPI descriptions into a single typed C# client and one
+set of models, written as `.cs` files you check in. Every description is normalized first (the
+sections above), then all of them are merged into one path tree and one set of types. The
+generated code calls the `ApiWeld.Http` runtime (see "The runtime").
+
+### The manifest
+
+`apiweld generate apiweld.json` reads a manifest that sits beside the code it generates:
+
+```json
+{
+  "descriptions": ["resources/*.json"],
+  "namespace": "Example.Integration",
+  "client": "ExampleClient",
+  "output": "Generated",
+  "basePaths": ["/api", "/query"],
+  "paging": { "offset": "offset", "limit": "limit", "totalHeader": "X-Total-Count" },
+  "names": { "errors_1_0_0": "Errors" }
+}
+```
+
+- `descriptions` — required. File paths, or a wildcard in the file name within one folder
+  (`resources/*.json`), relative to the manifest. A description is known by its file name, so
+  two folders may not hold files with the same name.
+- `namespace`, `client` — required. The namespace generated code is written in, and the name of
+  the consumer's root client class, whose generated half the tool writes.
+- `output` — where generated files go, relative to the manifest. Defaults to `Generated`.
+- `basePaths` — leading path segments left out of navigation; see "Paths and versions".
+- `paging` — the names that make an operation paged; see "Page walking". Defaults as shown.
+- `names` — overrides for derived names; see "Names".
+
+The manifest holds no version settings. Versions come from the descriptions and are chosen in
+code, at every call site.
+
 ## The runtime
 
 `ApiWeld.Http` is the package generated clients reference. Generated code describes each
