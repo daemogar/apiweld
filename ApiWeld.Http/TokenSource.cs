@@ -45,7 +45,12 @@ public sealed class TokenSource(TokenExchangeOptions options, HttpClient exchang
 
 	async Task<string> ExchangeAsync(CancellationToken cancellationToken)
 	{
-		using var request = new HttpRequestMessage(HttpMethod.Post, options.Endpoint);
+		var endpoint = Uri.TryCreate(options.Endpoint, UriKind.Absolute, out var absolute)
+			&& absolute.Scheme is "http" or "https"
+				? absolute
+			: new Uri(options.Endpoint!.TrimStart('/'), UriKind.Relative);
+
+		using var request = new HttpRequestMessage(HttpMethod.Post, endpoint);
 		request.Headers.Authorization = new AuthenticationHeaderValue(options.Scheme, options.ApiKey);
 
 		using var response = await exchangeClient.SendAsync(request, cancellationToken).ConfigureAwait(false);

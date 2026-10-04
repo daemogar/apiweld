@@ -20,17 +20,21 @@ public class RegistrationTests
 		=> new ConfigurationBuilder().AddInMemoryCollection(values).Build().GetSection("ExampleApi");
 
 	[Fact]
-	public void Binds_options_and_configures_the_http_client()
+	public async Task Binds_options_and_configures_the_http_client()
 	{
+		var data = new FakeHandler((_, _) => new HttpResponseMessage(HttpStatusCode.OK));
 		var services = new ServiceCollection();
 		services.AddApiWeldClient<SampleClient>(Section(new()
 		{
 			["ExampleApi:BaseUrl"] = "https://api.example.test/root",
 			["ExampleApi:Timeout"] = "00:00:05",
 			["ExampleApi:VersionMismatch"] = "Warn"
-		}));
+		})).ConfigurePrimaryHttpMessageHandler(() => data);
 
 		var client = services.BuildServiceProvider().GetRequiredService<SampleClient>();
+		await client.Http.GetAsync("a", TestContext.Current.CancellationToken);
+
+		Assert.Equal("https://api.example.test/root/a", data.Requests.Single().Request.RequestUri!.ToString());
 
 		Assert.Equal("https://api.example.test/root/", client.Http.BaseAddress!.ToString());
 		Assert.Equal(TimeSpan.FromSeconds(5), client.Http.Timeout);
@@ -59,7 +63,30 @@ public class RegistrationTests
 			["ExampleApi:TokenExchange:Endpoint"] = "/auth"
 		}));
 
-		Assert.Throws<OptionsValidationException>(() => services.BuildServiceProvider().GetRequiredService<SampleClient>());
+		var exception = Assert.Throws<OptionsValidationException>(() => services.BuildServiceProvider().GetRequiredService<SampleClient>());
+
+		Assert.Contains("ApiKey", exception.Message);
+	}
+
+	[Fact]
+	public async Task Posts_the_token_exchange_beneath_the_base_url()
+	{
+		var data = new FakeHandler((_, _) => new HttpResponseMessage(HttpStatusCode.OK));
+		var exchange = new FakeHandler((_, _) => new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent("tok") });
+
+		var services = new ServiceCollection();
+		services.AddApiWeldClient<SampleClient>(Section(new()
+		{
+			["ExampleApi:BaseUrl"] = "https://api.example.test/root",
+			["ExampleApi:TokenExchange:Endpoint"] = "/auth",
+			["ExampleApi:TokenExchange:ApiKey"] = "key"
+		})).ConfigurePrimaryHttpMessageHandler(() => data);
+		services.AddHttpClient(ApiWeldServiceCollectionExtensions.TokenExchangeClientName<SampleClient>())
+			.ConfigurePrimaryHttpMessageHandler(() => exchange);
+
+		await services.BuildServiceProvider().GetRequiredService<SampleClient>().Http.GetAsync("a", TestContext.Current.CancellationToken);
+
+		Assert.Equal("https://api.example.test/root/auth", exchange.Requests.Single().Request.RequestUri!.ToString());
 	}
 
 	[Fact]
