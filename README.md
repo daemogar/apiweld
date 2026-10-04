@@ -79,6 +79,21 @@ Collapse has to come before deduplication: two schemas that differ only in an ab
 not structurally identical until that branch is collapsed away. Deduplicating first would compare
 them as written, find no match, and leave both in place.
 
+## The runtime
+
+`ApiWeld.Http` is the package generated clients reference. Generated code describes each
+operation as data and hands it to the runtime, which builds, sends and reads the request.
+
+### Media-type versions
+
+Many descriptions version an API through its media types rather than its URLs — a response is
+declared as `application/vnd.example.v12.6.0+json` instead of plain `application/json`. The
+runtime reads the version token from such a media type (`.v` followed by dot-separated digits,
+immediately before `+` or the end) and normalizes it by dropping leading zeros and trailing zero
+parts, so `v15`, `v15.0` and `v15.0.0` all read as `15`. A generated client names each version
+member after that normalized form: `12.6` becomes `V12_6`, and an operation with no versioned
+media type is `V0`.
+
 ## Packages
 
 | Package | What it is |
