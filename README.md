@@ -154,6 +154,41 @@ otherwise it is kept for `FallbackLifetime`. A 401 response invalidates the cach
 retries the request exactly once with a fresh one, replaying the same body. A failed exchange
 throws `TokenExchangeException` naming the endpoint and status — never the key.
 
+### Registration
+
+A generated client's root is a `partial class` deriving from `ApiClient`. The consumer's own part
+declares the constructor — `ApiClient` has no parameterless one — and may take any further
+dependencies it needs:
+
+```csharp
+public partial class ExampleClient(HttpClient http, ApiClientOptions<ExampleClient> options)
+	: ApiClient(http, options);
+```
+
+Register it with its configuration section; the call returns the `IHttpClientBuilder`, so
+consumer-specific handlers chain on after the token handler:
+
+```csharp
+services.AddApiWeldClient<ExampleClient>(configuration.GetSection("ExampleApi"))
+	.AddHttpMessageHandler<SomeConsumerHandler>();
+```
+
+```json
+"ExampleApi": {
+  "BaseUrl": "https://api.example.test",
+  "Timeout": "00:01:40",
+  "PooledConnectionLifetime": "00:02:00",
+  "VersionMismatch": "Throw",
+  "TokenExchange": { "Endpoint": "/auth", "ApiKey": "…" }
+}
+```
+
+`BaseUrl` is required; a trailing slash is added when missing so operation paths resolve beneath
+it. `Timeout` defaults to 100 seconds, `PooledConnectionLifetime` to two minutes and
+`VersionMismatch` to `Throw`. `TokenExchange` is off unless the section is present, and then
+needs `Endpoint` and `ApiKey`; see "Token exchange" for the rest of its settings. Options are
+validated on first use (and at start-up when the host runs start-up validation).
+
 ## Packages
 
 | Package | What it is |

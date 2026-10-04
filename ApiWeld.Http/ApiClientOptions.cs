@@ -1,6 +1,7 @@
 ﻿namespace ApiWeld.Http;
 
 /// <summary>How a generated client reaches its API; bound from configuration.</summary>
+/// <remarks>See README.md, "Registration".</remarks>
 public class ApiClientOptions
 {
 	/// <summary>The API's base address. Required.</summary>
