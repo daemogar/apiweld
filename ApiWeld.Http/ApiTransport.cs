@@ -1,0 +1,77 @@
+﻿using System.Text.Json;
+using System.Text.RegularExpressions;
+
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
+
+namespace ApiWeld.Http;
+
+/// <summary>Builds, sends and reads every request a generated client makes.</summary>
+public sealed partial class ApiTransport
+{
+	/// <summary>A transport over <paramref name="http"/>, whose base address the operation templates are relative to.</summary>
+	public ApiTransport(HttpClient http, ApiClientOptions options, ILogger? logger = null)
+	{
+		Http = http;
+		ClientOptions = options;
+		Logger = logger ?? NullLogger.Instance;
+	}
+
+	HttpClient Http { get; }
+
+	ApiClientOptions ClientOptions { get; }
+
+	ILogger Logger { get; }
+
+	/// <summary>The serializer options bodies are read and written with.</summary>
+	public JsonSerializerOptions Json => ApiJson.Options;
+
+	/// <summary>The request an operation would send, without sending it.</summary>
+	public HttpRequestMessage CreateRequest(ApiOperation operation, IReadOnlyList<string> path, IApiQuery? query = null, object? body = null)
+	{
+		var parameters = new ApiRequestParameters();
+		query?.Apply(parameters);
+
+		return CreateRequest(operation, path, parameters, body);
+	}
+
+	internal HttpRequestMessage CreateRequest(ApiOperation operation, IReadOnlyList<string> path, ApiRequestParameters parameters, object? body)
+	{
+		var url = BuildUrl(operation.Template, path, parameters.QueryValues);
+		var request = new HttpRequestMessage(operation.Method, new Uri(url, UriKind.Relative));
+
+		if (operation.Accept is { } accept)
+			request.Headers.TryAddWithoutValidation("Accept", accept);
+
+		foreach (var (name, value) in parameters.Headers)
+			request.Headers.TryAddWithoutValidation(name, value);
+
+		if (body is not null)
+		{
+			var content = new ByteArrayContent(JsonSerializer.SerializeToUtf8Bytes(body, body.GetType(), Json));
+			content.Headers.TryAddWithoutValidation("Content-Type", operation.ContentType ?? "application/json");
+			request.Content = content;
+		}
+
+		return request;
+	}
+
+	[GeneratedRegex(@"\{[^}]+\}")]
+	private static partial Regex Placeholder();
+
+	static string BuildUrl(string template, IReadOnlyList<string> path, IReadOnlyList<KeyValuePair<string, string>> query)
+	{
+		var index = 0;
+		var url = Placeholder().Replace(template.TrimStart('/'), _ => index < path.Count
+			? Uri.EscapeDataString(path[index++])
+			: throw new ArgumentException($"The template {template} needs more than the {path.Count} path values given."));
+
+		if (index != path.Count)
+			throw new ArgumentException($"The template {template} takes {index} path values, not {path.Count}.");
+
+		if (query.Count == 0)
+			return url;
+
+		return url + "?" + string.Join('&', query.Select(pair => Uri.EscapeDataString(pair.Key) + "=" + Uri.EscapeDataString(pair.Value)));
+	}
+}
