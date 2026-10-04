@@ -32,6 +32,7 @@
     <ProjectReference Include="../ApiWeld.Core/ApiWeld.Core.csproj" />
     <ProjectReference Include="../ApiWeld.Cli/ApiWeld.Cli.csproj" />
     <ProjectReference Include="../ApiWeld.Http/ApiWeld.Http.csproj" />
+    <ProjectReference Include="../ApiWeld.Generator/ApiWeld.Generator.csproj" />
   </ItemGroup>
 
 </Project>
