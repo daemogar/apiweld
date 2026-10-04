@@ -140,6 +140,20 @@ There is no request cap: a large result set is never cut short, and the repeat g
 stops a runaway walk. `limit` stays on the query object and acts as the page size; the offset is
 owned by the walk and does not appear there.
 
+### Token exchange
+
+Some APIs take a long-lived key once and hand back a short-lived bearer token for every other
+request. Configuring `TokenExchange` adds a handler that does this: it posts to `Endpoint` with
+`Authorization: <Scheme> <ApiKey>` over a separate, unauthenticated `HttpClient` (so fetching a
+token never needs a token), reads the token from the response — the whole trimmed body by
+default, or one string property with `TokenFormat: JsonProperty` and `TokenProperty` — and sends
+it as `Authorization: Bearer <token>`.
+
+The token is cached. When it is a JWT, it is replaced `RefreshMargin` before its `exp` claim;
+otherwise it is kept for `FallbackLifetime`. A 401 response invalidates the cached token and
+retries the request exactly once with a fresh one, replaying the same body. A failed exchange
+throws `TokenExchangeException` naming the endpoint and status — never the key.
+
 ## Packages
 
 | Package | What it is |
