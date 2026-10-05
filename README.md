@@ -125,7 +125,8 @@ description calls it: `/widgets/{id}` and `/widgets/{widgetId}/parts` share one 
 to `Api.Widgets[id].Parts`. The indexer takes a `Guid` when every description declares a UUID
 there, and a `string` otherwise (with a warning when they disagree). The same verb at the same
 version on one merged path is an error, and so is a segment that mixes text and parameters, such
-as `{id}.json` or `{from}-{to}`: every parameter must fill a whole segment.
+as `{id}.json` or `{from}-{to}`: every parameter must fill a whole segment. A path that carries a
+query string or fragment, such as `/widgets?kind=a`, is an error too.
 
 An operation's version is read from the media type of its success response — never from the
 description's `info.version`, which is only reported when it disagrees. When a response
@@ -135,6 +136,11 @@ declares several media types, the most specific versioned JSON type wins over pl
 type is `V0`; one with no response body at all takes the single version the rest of its
 description uses, if there is exactly one. A request body and the error bodies keep their own
 media types inside their operation, and never create members of their own.
+
+A success declared as the range `2XX` is read like a numbered one; when both are present, the
+numbered code wins. `default` is never read as the success, because it normally describes
+errors: an operation whose only success is `default` is generated without a response body, with
+a warning.
 
 Several files for one resource at different versions generate side-by-side members. Removing a
 file removes its member, so every call site that named it stops compiling — which is how a

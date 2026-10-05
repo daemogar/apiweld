@@ -46,3 +46,6 @@
   so a token exchange configured or removed in code is honored; a second registration of the same
   client is ignored instead of adding every handler twice; a `BaseUrl` carrying a query or
   fragment is refused.
+- `ApiWeld.Generator`: a success response declared as `2XX` is read as the success, instead of
+  the operation silently returning nothing; a success declared only as `default` gets a warning;
+  a path carrying a query or fragment is an error.

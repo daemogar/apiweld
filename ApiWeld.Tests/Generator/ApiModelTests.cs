@@ -73,6 +73,58 @@ public class ApiModelTests
 		Assert.Equal("_3DModels", Descriptions.Node(model, "3d-models").ClassBase);
 	}
 
+	[Theory]
+	[InlineData("2XX")]
+	[InlineData("2xx")]
+	public void Reads_a_success_declared_as_a_range(string status)
+	{
+		var get = $$"""{ "responses": { "{{status}}": { "content": { "{{V1}}": { "schema": {{Descriptions.Thing}} } } } } }""";
+
+		var (model, diagnostics) = Descriptions.Build(Plain, ("widgets.json", Descriptions.Document($$"""{ "/api/widgets": { "get": {{get}} } }""")));
+
+		Assert.IsType<ModelRef>(Only(model, "V1", "Get", "widgets").Response);
+		Assert.Empty(diagnostics);
+	}
+
+	[Fact]
+	public void Prefers_a_numbered_success_over_a_range()
+	{
+		var get = $$"""
+			{ "responses": {
+				"200": { "content": { "{{V1}}": { "schema": {{Descriptions.Thing}} } } },
+				"2XX": { "content": { "{{V1}}": { "schema": {{Descriptions.Things}} } } } } }
+			""";
+
+		var (model, diagnostics) = Descriptions.Build(Plain, ("widgets.json", Descriptions.Document($$"""{ "/api/widgets": { "get": {{get}} } }""")));
+
+		Assert.IsType<ModelRef>(Only(model, "V1", "Get", "widgets").Response);
+		Assert.Empty(diagnostics);
+	}
+
+	[Fact]
+	public void Warns_when_the_only_success_is_default()
+	{
+		var get = $$"""{ "responses": { "default": { "content": { "{{V1}}": { "schema": {{Descriptions.Thing}} } } } } }""";
+
+		var (model, diagnostics) = Descriptions.Build(Plain, ("widgets.json", Descriptions.Document($$"""{ "/api/widgets": { "get": {{get}} } }""")));
+
+		Assert.Null(Only(model, "V0", "Get", "widgets").Response);
+		Assert.Contains(diagnostics, d => d.Severity == Severity.Warning
+			&& d.Message == "widgets.json: GET /api/widgets declares its success response only as \"default\"; it is generated without a response body.");
+	}
+
+	[Theory]
+	[InlineData("/api/widgets?kind=a")]
+	[InlineData("/api/widgets#top")]
+	public void Refuses_a_path_carrying_a_query_or_fragment(string path)
+	{
+		var (_, diagnostics) = Descriptions.Build(Plain, ("widgets.json", Descriptions.Document(
+			$$"""{ "{{path}}": { "get": {{Descriptions.Returns(V1, Descriptions.Thing)}} } }""")));
+
+		Assert.Contains(diagnostics, d => d.Severity == Severity.Error
+			&& d.Message == $"widgets.json: GET {path} carries a query or fragment; that is not supported.");
+	}
+
 	[Fact]
 	public void Warns_about_each_operation_under_an_unsupported_verb()
 	{
