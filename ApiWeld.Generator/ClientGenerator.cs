@@ -24,6 +24,9 @@ public static class ClientGenerator
 		if (!diagnostics.HasErrors)
 			NameResolver.Resolve(model.Models, manifest.Client, diagnostics);
 
+		if (!diagnostics.HasErrors)
+			ReservedNames.Check(model, manifest.Client, diagnostics);
+
 		if (diagnostics.HasErrors)
 			return new([], diagnostics.Items);
 

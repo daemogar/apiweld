@@ -168,7 +168,10 @@ Types merge when their shape and direction are identical, across files as well a
 and a merged type takes its shortest candidate name, ties broken in ordinal order. When
 different shapes want one name, the one a GET returns keeps it and the others gain their verb
 after the version (`ThingV1PostResponse`), with a warning; a clash that survives that is an
-error naming the fix.
+error naming the fix. A model may not take a name the generated navigation already has —
+`{Path}Node`, `{Path}{Version}Operations`, `{Path}{Version}{Verb}Query`, `{Client}Api` — nor the
+name of a type the generated code uses, such as `ApiTransport` or `JsonElement`; that is an error
+asking for a `names` entry.
 
 `names` in the manifest overrides a base name. A description's file stem replaces its Root; a
 component schema's name replaces the base of the type built from it, and the types nested under

@@ -49,3 +49,6 @@
 - `ApiWeld.Generator`: a success response declared as `2XX` is read as the success, instead of
   the operation silently returning nothing; a success declared only as `default` gets a warning;
   a path carrying a query or fragment is an error.
+- `ApiWeld.Generator`: a model named like a generated navigation class or a type the generated
+  code uses is reported as an error asking for a `names` entry, instead of producing code that
+  does not compile.

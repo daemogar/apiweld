@@ -89,6 +89,29 @@ public class EmissionTests
 		Assert.Empty(diagnostics);
 	}
 
+	[Theory]
+	[InlineData("WidgetsNode", "the navigation class for /widgets")]
+	[InlineData("WidgetsV0Operations", "the navigation class for /widgets")]
+	[InlineData("ApiTransport", "a type the generated code uses")]
+	public void Refuses_a_model_named_like_a_type_the_client_already_has(string name, string what)
+	{
+		const string get = """
+			{ "responses": {
+				"200": { "content": { "application/json": { "schema": { "type": "array", "items": { "type": "string" } } } } },
+				"400": { "content": { "application/json": { "schema": { "$ref": "#/components/schemas/errors" } } } } } }
+			""";
+		var description = Descriptions.Document(
+			$$"""{ "/api/widgets": { "get": {{get}} } }""",
+			"""{ "errors": { "type": "object", "properties": { "message": { "type": "string" } } } }""");
+		var manifest = FixtureManifest with { Names = new Dictionary<string, string> { ["errors"] = name } };
+
+		var result = ClientGenerator.Generate(manifest, [new DescriptionSource("widgets.json", description)]);
+
+		Assert.False(result.Succeeded);
+		Assert.Contains(result.Diagnostics, d => d.Severity == Severity.Error
+			&& d.Message == $"{name}: a model would share its name with {what}; add a \"names\" entry.");
+	}
+
 	[Fact]
 	public void Generates_identical_output_every_time()
 	{
