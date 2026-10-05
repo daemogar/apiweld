@@ -250,6 +250,21 @@ public class ApiModelTests
 		Assert.Contains(diagnostics, d => d.Severity == Severity.Error && d.Message.Contains("root of the API"));
 	}
 
+	[Theory]
+	[InlineData("{id}.json")]
+	[InlineData("{a}-{b}")]
+	[InlineData("v{id}")]
+	public void Refuses_a_path_segment_mixing_text_and_parameters(string segment)
+	{
+		var (model, diagnostics) = Descriptions.Build(Plain, ("things.json", Descriptions.Document(
+			$$"""{ "/api/things/{{segment}}": { "get": {{Descriptions.Returns("application/json", Descriptions.Things)}} } }""")));
+
+		var error = Assert.Single(diagnostics, d => d.Severity == Severity.Error);
+		Assert.Contains("things.json", error.Message);
+		Assert.Contains(segment, error.Message);
+		Assert.Empty(model.Root.Children);
+	}
+
 	[Fact]
 	public void Reports_a_description_that_cannot_be_read()
 	{

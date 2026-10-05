@@ -271,11 +271,17 @@ internal sealed class ApiModelBuilder
 			return null;
 		}
 
+		if (segments.Skip(skip).FirstOrDefault(segment => segment.IndexOfAny(['{', '}']) >= 0 && !IsParameter(segment)) is { } mixed)
+		{
+			diagnostics.Error($"{file}: {label} has the segment {mixed}, which mixes text and parameters; that is not supported.");
+			return null;
+		}
+
 		var node = root;
 
 		foreach (var segment in segments.Skip(skip))
 		{
-			var isParameter = segment.StartsWith('{') && segment.EndsWith('}');
+			var isParameter = IsParameter(segment);
 			node = node.Child(segment, isParameter);
 
 			if (!isParameter)
@@ -299,6 +305,10 @@ internal sealed class ApiModelBuilder
 
 		return node;
 	}
+
+	/// <summary>Whether <paramref name="segment"/> is exactly one parameter, such as <c>{id}</c>.</summary>
+	static bool IsParameter(string segment)
+		=> segment.Length > 2 && segment[0] == '{' && segment[^1] == '}' && segment.AsSpan(1, segment.Length - 2).IndexOfAny('{', '}') < 0;
 
 	/// <summary>Refuses trees whose members or classes would share a name.</summary>
 	void Check()
