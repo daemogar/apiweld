@@ -38,7 +38,8 @@
 - `ApiWeld.Http`: a header the request cannot carry (an invalid name, a content header, or a
   value containing a line break) and an operation template carrying a query or fragment are
   refused with `ArgumentException` when the request is built, instead of being dropped or
-  mangled. A `byte[]` query or header value is sent as one base64 value.
+  mangled. A `byte[]` query or header value is sent as one base64 value, a list header value as
+  comma-separated values, and a content header parameter such as `Content-Language` on the body.
 - `ApiWeld.Http`: a token exchange that cannot reach its endpoint or times out throws
   `TokenExchangeException` with the cause as its inner exception, and the request retried after
   a 401 is disposed once it is answered.

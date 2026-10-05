@@ -1,5 +1,4 @@
-﻿using System.Net.Http.Headers;
-using System.Text.Json;
+﻿using System.Text.Json;
 using System.Text.RegularExpressions;
 
 using Microsoft.Extensions.Logging;
@@ -43,18 +42,17 @@ public sealed partial class ApiTransport
 
 		try
 		{
-			if (operation.Accept is { } accept)
-				AddHeader(request.Headers, "Accept", accept);
+			if (body is not null)
+				request.Content = new ByteArrayContent(JsonSerializer.SerializeToUtf8Bytes(body, body.GetType(), Json));
 
-			foreach (var (name, value) in parameters.Headers)
-				AddHeader(request.Headers, name, value);
+			if (operation.Accept is { } accept)
+				AddHeader(request, "Accept", accept);
 
 			if (body is not null)
-			{
-				var content = new ByteArrayContent(JsonSerializer.SerializeToUtf8Bytes(body, body.GetType(), Json));
-				request.Content = content;
-				AddHeader(content.Headers, "Content-Type", operation.ContentType ?? "application/json");
-			}
+				AddHeader(request, "Content-Type", operation.ContentType ?? "application/json");
+
+			foreach (var (name, value) in parameters.Headers)
+				AddHeader(request, name, value);
 
 			return request;
 		}
@@ -65,10 +63,11 @@ public sealed partial class ApiTransport
 		}
 	}
 
-	/// <summary>Adds a header, refusing one the request cannot carry rather than dropping it.</summary>
-	static void AddHeader(HttpHeaders headers, string name, string value)
+	/// <summary>Adds a header to the request, or to its body when it is a content header; refuses one neither can carry rather than dropping it.</summary>
+	static void AddHeader(HttpRequestMessage request, string name, string value)
 	{
-		if (value.AsSpan().IndexOfAny('\r', '\n') >= 0 || !headers.TryAddWithoutValidation(name, value))
+		if (value.AsSpan().IndexOfAny('\r', '\n') >= 0
+			|| !(request.Headers.TryAddWithoutValidation(name, value) || request.Content?.Headers.TryAddWithoutValidation(name, value) == true))
 			throw new ArgumentException($"The header \"{name}\" cannot be sent on a request.");
 	}
 

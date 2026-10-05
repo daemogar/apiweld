@@ -91,6 +91,29 @@ public class RequestTests
 		Assert.Contains(name, exception.Message);
 	}
 
+	sealed class ListHeaderQuery : IApiQuery
+	{
+		public void Apply(ApiRequestParameters parameters) => parameters.Header("X-Tags", new List<string> { "a", "b" });
+	}
+
+	[Fact]
+	public void Sends_a_list_header_as_comma_separated_values()
+	{
+		using var request = Transport.CreateRequest(Get, ["7"], new ListHeaderQuery());
+
+		Assert.Equal("a,b", string.Join(",", request.Headers.GetValues("X-Tags")));
+	}
+
+	[Fact]
+	public void Sends_a_content_header_parameter_on_the_body()
+	{
+		var put = new ApiOperation(HttpMethod.Put, "api/widgets/{id}");
+
+		using var request = Transport.CreateRequest(put, ["9"], new HeaderQuery("Content-Language", "en"), new Dictionary<string, object?> { ["name"] = "n" });
+
+		Assert.Equal("en", Assert.Single(request.Content!.Headers.ContentLanguage));
+	}
+
 	[Theory]
 	[InlineData("api/widgets?kind=a")]
 	[InlineData("api/widgets#top")]

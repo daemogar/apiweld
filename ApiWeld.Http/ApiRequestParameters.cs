@@ -33,11 +33,13 @@ public sealed class ApiRequestParameters
 		query.Add(new(name, Format(value)));
 	}
 
-	/// <summary>Sets a header; null removes it.</summary>
+	/// <summary>Sets a header; a sequence other than a byte array is joined with commas; null removes it.</summary>
 	public void Header(string name, object? value)
 	{
 		if (value is null)
 			headers.Remove(name);
+		else if (value is IEnumerable sequence and not string and not byte[])
+			headers[name] = string.Join(',', sequence.Cast<object?>().OfType<object>().Select(Format));
 		else
 			headers[name] = Format(value);
 	}
