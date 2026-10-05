@@ -1,3 +1,5 @@
 ﻿using ApiWeld.Cli;
 
-return Normalizer.Run(args, Console.Out, Console.Error);
+return args is ["generate", ..]
+	? GenerateCommand.Run(args, Console.Out, Console.Error)
+	: Normalizer.Run(args, Console.Out, Console.Error);

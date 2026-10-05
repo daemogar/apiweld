@@ -13,6 +13,9 @@
   </ItemGroup>
 
   <ItemGroup>
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp" />
+    <PackageReference Include="Microsoft.Extensions.Configuration" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" />
     <PackageReference Include="Verify.XunitV3" />
     <PackageReference Include="xunit.v3" />
@@ -29,6 +32,8 @@
   <ItemGroup>
     <ProjectReference Include="../ApiWeld.Core/ApiWeld.Core.csproj" />
     <ProjectReference Include="../ApiWeld.Cli/ApiWeld.Cli.csproj" />
+    <ProjectReference Include="../ApiWeld.Http/ApiWeld.Http.csproj" />
+    <ProjectReference Include="../ApiWeld.Generator/ApiWeld.Generator.csproj" />
   </ItemGroup>
 
 </Project>

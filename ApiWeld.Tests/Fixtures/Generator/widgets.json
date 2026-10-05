@@ -1,0 +1,86 @@
+{
+  "openapi": "3.0.1",
+  "info": { "title": "Widgets", "version": "2.1.0" },
+  "paths": {
+    "/api/widgets": {
+      "get": {
+        "parameters": [
+          { "name": "offset", "in": "query", "schema": { "type": "integer" } },
+          { "name": "limit", "in": "query", "schema": { "type": "integer" } },
+          { "name": "criteria", "in": "query", "description": "A JSON filter.", "schema": { "type": "string" } },
+          { "name": "Accept", "in": "header", "schema": { "type": "string" } }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": { "schema": { "type": "array", "items": { "$ref": "#/components/schemas/widget" } } },
+              "application/vnd.example.v2+json": { "schema": { "type": "array", "items": { "$ref": "#/components/schemas/widget" } } }
+            }
+          },
+          "400": { "content": { "application/vnd.example.errors.v1+json": { "schema": { "$ref": "#/components/schemas/errors" } } } }
+        }
+      },
+      "post": {
+        "requestBody": { "content": { "application/vnd.example.v2+json": { "schema": { "$ref": "#/components/schemas/new-widget" } } } },
+        "responses": {
+          "201": { "content": { "application/vnd.example.v2+json": { "schema": { "$ref": "#/components/schemas/widget" } } } },
+          "400": { "content": { "application/vnd.example.errors.v1+json": { "schema": { "$ref": "#/components/schemas/errors" } } } }
+        }
+      }
+    },
+    "/api/widgets/{id}": {
+      "parameters": [ { "name": "id", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } } ],
+      "get": { "responses": { "200": { "content": { "application/vnd.example.v2+json": { "schema": { "$ref": "#/components/schemas/widget" } } } } } },
+      "put": {
+        "requestBody": { "content": { "application/vnd.example.v2+json": { "schema": { "$ref": "#/components/schemas/new-widget" } } } },
+        "responses": { "200": { "content": { "application/vnd.example.v2+json": { "schema": { "$ref": "#/components/schemas/widget" } } } } }
+      },
+      "delete": { "responses": { "204": { "description": "Deleted." } } },
+      "patch": {
+        "parameters": [ { "name": "notify", "in": "query", "description": "Whether watchers are told.", "schema": { "type": "boolean" } } ],
+        "requestBody": { "content": { "application/vnd.example.v2+json": { "schema": { "$ref": "#/components/schemas/new-widget" } } } },
+        "responses": { "200": { "content": { "application/vnd.example.v2+json": { "schema": { "$ref": "#/components/schemas/widget" } } } } }
+      }
+    },
+    "/api/widgets/{id}/history": {
+      "parameters": [ { "name": "id", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } } ],
+      "get": {
+        "parameters": [ { "name": "since", "in": "query", "schema": { "type": "string", "format": "date-time" } } ],
+        "responses": { "200": { "content": { "application/vnd.example.v2+json": { "schema": { "type": "array", "items": { "$ref": "#/components/schemas/widget" } } } } } }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "widget": {
+        "type": "object",
+        "description": "A widget.",
+        "required": ["id"],
+        "properties": {
+          "id": { "type": "string", "format": "uuid" },
+          "name": { "type": "string", "description": "What it is called." },
+          "status": { "type": "string", "enum": ["active", "retired"] },
+          "dimensions": { "type": "object", "properties": { "width": { "type": "number" }, "height": { "type": "number" } } },
+          "tags": { "type": "array", "items": { "type": "string" } },
+          "made": { "type": "string", "format": "date" }
+        }
+      },
+      "new-widget": {
+        "type": "object",
+        "properties": {
+          "name": { "type": "string" },
+          "status": { "type": "string", "enum": ["active", "retired"] }
+        }
+      },
+      "errors": {
+        "type": "object",
+        "properties": {
+          "errors": {
+            "type": "array",
+            "items": { "type": "object", "properties": { "code": { "type": "string" }, "message": { "type": "string" } } }
+          }
+        }
+      }
+    }
+  }
+}

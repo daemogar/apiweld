@@ -1,24 +1,27 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <OutputType>Exe</OutputType>
     <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <IsPackable>true</IsPackable>
-    <PackAsTool>true</PackAsTool>
-    <ToolCommandName>apiweld</ToolCommandName>
-    <PackageId>ApiWeld.Cli</PackageId>
-    <Description>Command-line tool for normalizing OpenAPI descriptions and generating typed C# clients from them.</Description>
+    <PackageId>ApiWeld.Generator</PackageId>
+    <Description>Generates one typed C# client and one merged model set from one or more OpenAPI descriptions.</Description>
     <PackageLicenseExpression>AGPL-3.0-or-later</PackageLicenseExpression>
     <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PackageTags>openapi;codegen;client</PackageTags>
     <RepositoryUrl>https://github.com/daemogar/apiweld</RepositoryUrl>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
   </PropertyGroup>
 
   <ItemGroup>
     <None Include="../README.md" Pack="true" PackagePath="/" />
+    <InternalsVisibleTo Include="ApiWeld.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="../ApiWeld.Core/ApiWeld.Core.csproj" />
-    <ProjectReference Include="../ApiWeld.Generator/ApiWeld.Generator.csproj" />
+    <ProjectReference Include="../ApiWeld.Http/ApiWeld.Http.csproj" />
   </ItemGroup>
 
 </Project>

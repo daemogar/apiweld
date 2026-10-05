@@ -16,6 +16,8 @@ on:
 env:
   CORE_PROJECT: ApiWeld.Core/ApiWeld.Core.csproj
   CLI_PROJECT: ApiWeld.Cli/ApiWeld.Cli.csproj
+  HTTP_PROJECT: ApiWeld.Http/ApiWeld.Http.csproj
+  GENERATOR_PROJECT: ApiWeld.Generator/ApiWeld.Generator.csproj
   NUPKG_DIR: nupkgs
   # The next planned official release. Betas are cut as <NEXT_VERSION>-beta.<run#>
   # so they always compare BELOW the official they precede. Keep in sync with the
@@ -90,6 +92,8 @@ jobs:
       run: |
         dotnet pack "./${{ env.CORE_PROJECT }}" -c Release --include-symbols -p:SymbolPackageFormat=snupkg /p:Version=${{ env.VERSION }} /p:PackageReleaseNotes="See ${{ env.RELEASE_NOTE }}" -o "./${{ env.NUPKG_DIR }}"
         dotnet pack "./${{ env.CLI_PROJECT }}"  -c Release --include-symbols -p:SymbolPackageFormat=snupkg /p:Version=${{ env.VERSION }} /p:PackageReleaseNotes="See ${{ env.RELEASE_NOTE }}" -o "./${{ env.NUPKG_DIR }}"
+        dotnet pack "./${{ env.HTTP_PROJECT }}" -c Release --include-symbols -p:SymbolPackageFormat=snupkg /p:Version=${{ env.VERSION }} /p:PackageReleaseNotes="See ${{ env.RELEASE_NOTE }}" -o "./${{ env.NUPKG_DIR }}"
+        dotnet pack "./${{ env.GENERATOR_PROJECT }}" -c Release --include-symbols -p:SymbolPackageFormat=snupkg /p:Version=${{ env.VERSION }} /p:PackageReleaseNotes="See ${{ env.RELEASE_NOTE }}" -o "./${{ env.NUPKG_DIR }}"
 
     # Trusted publishing: exchange the OIDC token for a short-lived (1-hour)
     # nuget.org key. Requested immediately before the push so it is fresh.
@@ -115,7 +119,7 @@ jobs:
         set -u
         SOURCE="https://api.nuget.org/v3/index.json"
 
-        for PKG in "ApiWeld.Core" "ApiWeld.Cli"; do
+        for PKG in "ApiWeld.Core" "ApiWeld.Cli" "ApiWeld.Http" "ApiWeld.Generator"; do
         PKG_LC="${PKG,,}"
         echo "-- Checking $PKG --"
 

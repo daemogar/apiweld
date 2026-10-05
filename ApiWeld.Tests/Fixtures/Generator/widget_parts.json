@@ -1,0 +1,24 @@
+{
+  "openapi": "3.0.1",
+  "info": { "title": "Widget parts", "version": "1.0.0" },
+  "paths": {
+    "/api/widgets/{widgetId}/parts": {
+      "get": {
+        "parameters": [ { "name": "widgetId", "in": "path", "required": true, "schema": { "type": "string" } } ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/vnd.example.v1+json": {
+                "schema": {
+                  "type": "array",
+                  "items": { "type": "object", "properties": { "sku": { "type": "string" }, "quantity": { "type": "integer" } } }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": { "schemas": {} }
+}
