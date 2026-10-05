@@ -32,7 +32,9 @@ public static class ApiWeldServiceCollectionExtensions
 
 		if (exchanges)
 		{
-			services.AddHttpClient(exchangeName, (provider, http) => Configure(provider.GetRequiredService<ApiClientOptions<TClient>>(), http));
+			services.AddHttpClient(exchangeName, (provider, http) => Configure(provider.GetRequiredService<ApiClientOptions<TClient>>(), http))
+				.ConfigurePrimaryHttpMessageHandler(PrimaryHandler<TClient>)
+				.SetHandlerLifetime(Timeout.InfiniteTimeSpan);
 			services.TryAddKeyedSingleton(exchangeName, (provider, _) => new TokenSource(
 				provider.GetRequiredService<ApiClientOptions<TClient>>().TokenExchange!,
 				provider.GetRequiredService<IHttpClientFactory>().CreateClient(exchangeName),
@@ -40,10 +42,7 @@ public static class ApiWeldServiceCollectionExtensions
 		}
 
 		var builder = services.AddHttpClient<TClient>((provider, http) => Configure(provider.GetRequiredService<ApiClientOptions<TClient>>(), http))
-			.ConfigurePrimaryHttpMessageHandler(provider => new SocketsHttpHandler
-			{
-				PooledConnectionLifetime = provider.GetRequiredService<ApiClientOptions<TClient>>().PooledConnectionLifetime
-			})
+			.ConfigurePrimaryHttpMessageHandler(PrimaryHandler<TClient>)
 			.SetHandlerLifetime(Timeout.InfiniteTimeSpan);
 
 		if (exchanges)
@@ -51,6 +50,11 @@ public static class ApiWeldServiceCollectionExtensions
 
 		return builder;
 	}
+
+	static HttpMessageHandler PrimaryHandler<TClient>(IServiceProvider provider) where TClient : ApiClient => new SocketsHttpHandler
+	{
+		PooledConnectionLifetime = provider.GetRequiredService<ApiClientOptions<TClient>>().PooledConnectionLifetime
+	};
 
 	static void Configure(ApiClientOptions options, HttpClient http)
 	{

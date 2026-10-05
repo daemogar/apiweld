@@ -4,6 +4,7 @@ using ApiWeld.Http;
 
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Http;
 using Microsoft.Extensions.Options;
 
 namespace ApiWeld.Tests.Http;
@@ -87,6 +88,33 @@ public class RegistrationTests
 		await services.BuildServiceProvider().GetRequiredService<SampleClient>().Http.GetAsync("a", TestContext.Current.CancellationToken);
 
 		Assert.Equal("https://api.example.test/root/auth", exchange.Requests.Single().Request.RequestUri!.ToString());
+	}
+
+	[Fact]
+	public void Gives_the_api_and_token_exchange_clients_the_same_pooled_connection_lifetime()
+	{
+		var services = new ServiceCollection();
+		var api = services.AddApiWeldClient<SampleClient>(Section(new()
+		{
+			["ExampleApi:BaseUrl"] = "https://api.example.test/",
+			["ExampleApi:PooledConnectionLifetime"] = "00:00:42",
+			["ExampleApi:TokenExchange:Endpoint"] = "/auth",
+			["ExampleApi:TokenExchange:ApiKey"] = "key"
+		}));
+		var provider = services.BuildServiceProvider();
+
+		foreach (var name in new[] { api.Name, ApiWeldServiceCollectionExtensions.TokenExchangeClientName<SampleClient>() })
+		{
+			var options = provider.GetRequiredService<IOptionsMonitor<HttpClientFactoryOptions>>().Get(name);
+			var handler = provider.GetRequiredService<HttpMessageHandlerBuilder>();
+			handler.Name = name;
+
+			foreach (var action in options.HttpMessageHandlerBuilderActions)
+				action(handler);
+
+			Assert.Equal((name, TimeSpan.FromSeconds(42)), (name, Assert.IsType<SocketsHttpHandler>(handler.PrimaryHandler).PooledConnectionLifetime));
+			Assert.Equal((name, Timeout.InfiniteTimeSpan), (name, options.HandlerLifetime));
+		}
 	}
 
 	[Fact]
