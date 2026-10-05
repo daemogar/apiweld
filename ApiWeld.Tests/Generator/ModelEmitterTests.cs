@@ -40,4 +40,21 @@ public class ModelEmitterTests
 
 		Assert.Empty(diagnostics);
 	}
+
+	[Fact]
+	public void Compiles_properties_and_values_named_like_object_members()
+	{
+		string[] names = ["equals", "getHashCode", "toString", "getType", "memberwiseClone", "referenceEquals", "finalize", "printMembers"];
+		var properties = string.Join(", ", names.Select(name => $$""" "{{name}}": { "type": "string" }"""));
+		var values = string.Join(", ", names.Select(name => $"\"{name}\""));
+		var schema = $$"""{ "type": "object", "properties": { {{properties}}, "kind": { "type": "string", "enum": [{{values}}] } } }""";
+
+		var (model, resolved) = Descriptions.Resolve(Descriptions.Manifest("/api"), ("widgets.json", Descriptions.Document(
+			$$"""{ "/api/widgets": { "post": { "requestBody": { "content": { "application/json": { "schema": {{schema}} } } }, "responses": { "200": { "content": { "application/json": { "schema": {{schema}} } } } } } } }""")));
+		Assert.Empty(resolved);
+
+		var (_, diagnostics) = Compiler.Compile(model.Models.Select(m => ModelEmitter.Emit(m, "Example")).Select(file => (file.Path, file.Content)));
+
+		Assert.Empty(diagnostics);
+	}
 }

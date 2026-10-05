@@ -5,6 +5,9 @@ namespace ApiWeld.Generator.Emit;
 /// <summary>Writes one model: a partial class for an object, an extensible enum for a string enum.</summary>
 internal static class ModelEmitter
 {
+	/// <summary>Members every model inherits; a property of the same name would hide one.</summary>
+	static readonly string[] Inherited = ["Equals", "GetHashCode", "ToString", "GetType", "MemberwiseClone", "ReferenceEquals", "Finalize"];
+
 	public static GeneratedFile Emit(ModelType model, string @namespace)
 		=> new($"Models/{model.Name}.g.cs", model.Kind == ModelKind.Enum ? Enum(model, @namespace) : Object(model, @namespace));
 
@@ -15,7 +18,7 @@ internal static class ModelEmitter
 		writer.Summary(model.Summary ?? $"The {model.Name} body.");
 		writer.Open($"public partial class {model.Name}");
 
-		var taken = new HashSet<string>(StringComparer.Ordinal) { model.Name, "AdditionalData" };
+		var taken = new HashSet<string>(Inherited, StringComparer.Ordinal) { model.Name, "AdditionalData" };
 
 		foreach (var property in model.Properties)
 		{
@@ -43,7 +46,7 @@ internal static class ModelEmitter
 		writer.Line($"[JsonConverter(typeof(ExtensibleEnumConverter<{model.Name}>))]");
 		writer.Open($"public readonly record struct {model.Name}(string Value) : IExtensibleEnum<{model.Name}>");
 
-		var taken = new HashSet<string>(StringComparer.Ordinal) { model.Name, "Value", "Create", "ToString", "Equals", "GetHashCode", "Deconstruct" };
+		var taken = new HashSet<string>(Inherited, StringComparer.Ordinal) { model.Name, "Value", "Create", "Deconstruct", "PrintMembers" };
 
 		foreach (var value in model.EnumValues)
 		{
