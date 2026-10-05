@@ -308,11 +308,18 @@ services.AddApiWeldClient<ExampleClient>(configuration.GetSection("ExampleApi"))
 }
 ```
 
-`BaseUrl` is required; a trailing slash is added when missing so operation paths resolve beneath
-it. `Timeout` defaults to 100 seconds, `PooledConnectionLifetime` to two minutes and
-`VersionMismatch` to `Throw`. `TokenExchange` is off unless the section is present, and then
-needs `Endpoint` and `ApiKey`; see "Token exchange" for the rest of its settings. Options are
-validated on first use (and at start-up when the host runs start-up validation).
+`BaseUrl` is required and may not carry a query or fragment; a trailing slash is added when
+missing so operation paths resolve beneath it. `Timeout` defaults to 100 seconds,
+`PooledConnectionLifetime` to two minutes and `VersionMismatch` to `Throw`. `TokenExchange` is off
+unless it is configured — in the section, or in code with
+`services.Configure<ApiClientOptions<ExampleClient>>(…)` — and then needs `Endpoint` and `ApiKey`;
+see "Token exchange" for the rest of its settings. Whether a client exchanges tokens is decided
+once, when its HTTP pipeline is first built. Options are validated on first use (and at start-up
+when the host runs start-up validation).
+
+`AddApiWeldClient` registers a client type once. A second call for the same type — easy to make
+by accident through shared setup code or a test fixture — is ignored, section included, and
+returns a builder for the same client, so handlers chained on it still apply.
 
 ## Packages
 

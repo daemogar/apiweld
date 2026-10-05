@@ -42,3 +42,7 @@
 - `ApiWeld.Http`: a token exchange that cannot reach its endpoint or times out throws
   `TokenExchangeException` with the cause as its inner exception, and the request retried after
   a 401 is disposed once it is answered.
+- `ApiWeld.Http`: `AddApiWeldClient` decides whether to exchange tokens from the final options,
+  so a token exchange configured or removed in code is honored; a second registration of the same
+  client is ignored instead of adding every handler twice; a `BaseUrl` carrying a query or
+  fragment is refused.
