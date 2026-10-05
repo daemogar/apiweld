@@ -13,7 +13,7 @@ public sealed class ApiRequestParameters
 
 	internal IReadOnlyDictionary<string, string> Headers => headers;
 
-	/// <summary>Sets a query parameter, replacing any earlier value; a sequence repeats the name; null removes it.</summary>
+	/// <summary>Sets a query parameter, replacing any earlier value; a sequence repeats the name, except a byte array, which is one base64 value; null removes it.</summary>
 	public void Query(string name, object? value)
 	{
 		query.RemoveAll(pair => pair.Key == name);
@@ -21,7 +21,7 @@ public sealed class ApiRequestParameters
 		if (value is null)
 			return;
 
-		if (value is IEnumerable sequence and not string)
+		if (value is IEnumerable sequence and not string and not byte[])
 		{
 			foreach (var item in sequence)
 				if (item is not null)
@@ -51,6 +51,7 @@ public sealed class ApiRequestParameters
 		DateTimeOffset moment => moment.ToString("O", CultureInfo.InvariantCulture),
 		DateTime moment => moment.ToString("O", CultureInfo.InvariantCulture),
 		DateOnly day => day.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
+		byte[] bytes => Convert.ToBase64String(bytes),
 		IFormattable formattable => formattable.ToString(null, CultureInfo.InvariantCulture),
 		_ => value.ToString() ?? ""
 	};

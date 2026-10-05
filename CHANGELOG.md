@@ -35,3 +35,7 @@
 
 - `ApiWeld.Http`: a whole number written as `3.0` or `1e2` now reads into an integer property,
   and a number that does not fit its property reads as `null` instead of failing the response.
+- `ApiWeld.Http`: a header the request cannot carry (an invalid name, a content header, or a
+  value containing a line break) and an operation template carrying a query or fragment are
+  refused with `ArgumentException` when the request is built, instead of being dropped or
+  mangled. A `byte[]` query or header value is sent as one base64 value.

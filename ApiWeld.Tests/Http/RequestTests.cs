@@ -22,6 +22,16 @@ public class RequestTests
 		}
 	}
 
+	sealed class HeaderQuery(string name, string value) : IApiQuery
+	{
+		public void Apply(ApiRequestParameters parameters) => parameters.Header(name, value);
+	}
+
+	sealed class BytesQuery : IApiQuery
+	{
+		public void Apply(ApiRequestParameters parameters) => parameters.Query("data", new byte[] { 1, 2, 250 });
+	}
+
 	static readonly ApiTransport Transport = new(new HttpClient(), new ApiClientOptions());
 
 	static readonly ApiOperation Get = new(HttpMethod.Get, "api/students/{studentId}/levels");
@@ -68,6 +78,36 @@ public class RequestTests
 		using var request = Transport.CreateRequest(Get, ["7"], new SampleQuery { Trace = "abc" });
 
 		Assert.Equal("abc", Assert.Single(request.Headers.GetValues("X-Trace")));
+	}
+
+	[Theory]
+	[InlineData("Bad Header", "v")]
+	[InlineData("Content-Language", "en")]
+	[InlineData("X-Trace", "a\r\nInjected: b")]
+	public void Refuses_a_header_the_request_cannot_carry(string name, string value)
+	{
+		var exception = Assert.Throws<ArgumentException>(() => Transport.CreateRequest(Get, ["7"], new HeaderQuery(name, value)));
+
+		Assert.Contains(name, exception.Message);
+	}
+
+	[Theory]
+	[InlineData("api/widgets?kind=a")]
+	[InlineData("api/widgets#top")]
+	public void Refuses_a_template_carrying_a_query_or_fragment(string template)
+	{
+		var exception = Assert.Throws<ArgumentException>(() => Transport.CreateRequest(new ApiOperation(HttpMethod.Get, template), []));
+
+		Assert.Contains("query or fragment", exception.Message);
+	}
+
+	[Fact]
+	public void Sends_a_byte_array_as_one_base64_value()
+	{
+		using var request = Transport.CreateRequest(Get, ["7"], new BytesQuery());
+
+		Assert.Equal("api/students/7/levels?data=AQL6", request.RequestUri!.OriginalString);
+		Assert.Equal("AQL6", ApiRequestParameters.Format(new byte[] { 1, 2, 250 }));
 	}
 
 	[Fact]
