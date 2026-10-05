@@ -19,6 +19,25 @@ internal static partial class Words
 		"uint", "ulong", "unchecked", "unsafe", "ushort", "using", "virtual", "void", "volatile", "while"
 	};
 
+	/// <summary>Plurals the suffix rules get wrong, by lowercase plural; whole words only, since a suffix match would break regular words.</summary>
+	static readonly Dictionary<string, string> Irregular = new(StringComparer.Ordinal)
+	{
+		["people"] = "person", ["children"] = "child", ["men"] = "man", ["women"] = "woman", ["feet"] = "foot",
+		["teeth"] = "tooth", ["mice"] = "mouse", ["geese"] = "goose",
+		["movies"] = "movie", ["cookies"] = "cookie", ["pies"] = "pie", ["ties"] = "tie", ["calories"] = "calorie",
+		["zombies"] = "zombie", ["series"] = "series", ["species"] = "species", ["news"] = "news",
+		["analyses"] = "analysis", ["crises"] = "crisis", ["theses"] = "thesis", ["diagnoses"] = "diagnosis",
+		["hypotheses"] = "hypothesis", ["syntheses"] = "synthesis", ["parentheses"] = "parenthesis",
+		["indices"] = "index", ["matrices"] = "matrix", ["vertices"] = "vertex", ["appendices"] = "appendix",
+		["quizzes"] = "quiz", ["heroes"] = "hero", ["potatoes"] = "potato", ["tomatoes"] = "tomato",
+		["echoes"] = "echo", ["vetoes"] = "veto",
+		["knives"] = "knife", ["wives"] = "wife", ["lives"] = "life", ["wolves"] = "wolf", ["shelves"] = "shelf",
+		["halves"] = "half", ["calves"] = "calf",
+		["houses"] = "house", ["warehouses"] = "warehouse", ["causes"] = "cause", ["clauses"] = "clause",
+		["pauses"] = "pause", ["uses"] = "use", ["abuses"] = "abuse", ["excuses"] = "excuse", ["spouses"] = "spouse",
+		["blouses"] = "blouse"
+	};
+
 	public static IReadOnlyList<string> Split(string text) => [.. Word().Matches(text).Select(match => match.Value)];
 
 	public static bool IsKeyword(string text) => Keywords.Contains(text);
@@ -33,18 +52,22 @@ internal static partial class Words
 	}
 
 	/// <summary>PascalCase with the last word made singular: <c>academic-disciplines</c> becomes <c>AcademicDiscipline</c>.</summary>
-	public static string SingularPascal(string text)
+	public static string SingularPascal(string text, IReadOnlyDictionary<string, string>? singulars = null)
 	{
 		var words = Split(text).Select(Capitalize).ToList();
 
 		if (words.Count > 0)
-			words[^1] = Singular(words[^1]);
+			words[^1] = Singular(words[^1], singulars);
 
 		return string.Concat(words);
 	}
 
-	public static string Singular(string word)
+	/// <summary>The singular of one word: the manifest's map, then the known irregulars, then the suffix rules.</summary>
+	public static string Singular(string word, IReadOnlyDictionary<string, string>? singulars = null)
 	{
+		if (Mapped(word.ToLowerInvariant(), singulars) is { } mapped)
+			return word.Length > 0 && char.IsUpper(word[0]) ? Capitalize(mapped) : mapped;
+
 		var lower = word.ToLowerInvariant();
 
 		if (lower.Length > 3 && lower.EndsWith("ies", StringComparison.Ordinal))
@@ -61,6 +84,11 @@ internal static partial class Words
 
 		return word;
 	}
+
+	static string? Mapped(string lower, IReadOnlyDictionary<string, string>? singulars)
+		=> singulars is not null && singulars.TryGetValue(lower, out var own) ? own
+			: Irregular.TryGetValue(lower, out var known) ? known
+			: null;
 
 	/// <summary>A valid identifier: a leading digit gets <c>_</c>, a keyword gets <c>@</c>, empty text becomes <paramref name="fallback"/>.</summary>
 	public static string Identifier(string candidate, string fallback = "Value")

@@ -59,7 +59,7 @@ internal sealed class ApiModelBuilder
 			return;
 		}
 
-		var resource = manifest.Names.TryGetValue(stem, out var renamed) ? renamed : Words.SingularPascal(stem);
+		var resource = manifest.Names.TryGetValue(stem, out var renamed) ? renamed : Words.SingularPascal(stem, manifest.Singulars);
 
 		var operations = (
 			from path in paths.OrderBy(path => path.Key, StringComparer.Ordinal)
@@ -108,7 +108,7 @@ internal sealed class ApiModelBuilder
 		var mediaType = picked?.MediaType ?? inherited?.MediaType;
 		var version = MediaTypeVersion.Read(mediaType);
 		var member = MediaTypeVersion.MemberName(version);
-		var context = new NameContext(resource, member, verb, [], "Response", Direction.Response, method == "get", file);
+		var context = new NameContext(resource, member, verb, [], "Response", Direction.Response, method == "get", file) { Singulars = manifest.Singulars };
 		var response = picked?.Schema is { } schema ? shapes.Build(schema, document, context) : null;
 
 		var body = MediaTypes.Pick(References.Resolve(operation["requestBody"], document).Node?["content"]);
@@ -196,7 +196,7 @@ internal sealed class ApiModelBuilder
 
 			var errorVersion = MediaTypeVersion.Read(error.MediaType);
 			var context = new NameContext(resource + "Error", errorVersion is null ? "" : MediaTypeVersion.MemberName(errorVersion),
-				"", [], "", Direction.Error, false, file, ErrorRoot: true);
+				"", [], "", Direction.Error, false, file, ErrorRoot: true) { Singulars = manifest.Singulars };
 
 			types[code] = shapes.Build(error.Schema, document, context);
 		}

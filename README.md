@@ -99,7 +99,8 @@ generated code calls the `ApiWeld.Http` runtime (see "The runtime").
   "output": "Generated",
   "basePaths": ["/api", "/query"],
   "paging": { "offset": "offset", "limit": "limit", "totalHeader": "X-Total-Count" },
-  "names": { "errors_1_0_0": "Errors" }
+  "names": { "errors_1_0_0": "Errors" },
+  "singulars": { "octopi": "octopus" }
 }
 ```
 
@@ -112,6 +113,8 @@ generated code calls the `ApiWeld.Http` runtime (see "The runtime").
 - `basePaths` — leading path segments left out of navigation; see "Paths and versions".
 - `paging` — the names that make an operation paged; see "Page walking". Defaults as shown.
 - `names` — overrides for derived names; see "Names".
+- `singulars` — plural words the built-in rules get wrong, each mapped to its singular, one word
+  to one word; see "Names".
 
 Unknown keys are refused — at the top level and inside `paging` — so a misspelled setting is
 reported instead of ignored; keys starting with `$`, such as `$schema`, are allowed. `client`,
@@ -160,10 +163,13 @@ A generated type is named `{Root}{Version}{Path}{Suffix}`:
 - **Root** — the description's file name in PascalCase with its last word made singular:
   `academic-disciplines` becomes `AcademicDiscipline`. (`-ies` becomes `-y`; `-sses`, `-xes`,
   `-ches`, `-shes` and `-uses` drop `-es`; otherwise a trailing `-s` is dropped unless the word
-  ends `-ss`, `-us` or `-is`.)
+  ends `-ss`, `-us` or `-is`. Common irregular plurals are known — `people`, `series`,
+  `analyses`, `indices`, `warehouses` and others.)
 - **Version** — the version member, such as `V12_6`.
 - **Path** — the property path from the body, with array items singular: `addresses[].place`
-  becomes `AddressPlace`.
+  becomes `AddressPlace`. The same singular rules apply, and the manifest's `singulars` map comes
+  first, so a word the rules get wrong can be fixed even for an array that has no schema name to
+  override.
 - **Suffix** — always `Response` or `Request`, so a name does not change when a description
   starts or stops sharing a shape between the two. Error bodies have no suffix; they are named
   after their schema and the error media type's version, such as `ErrorsV2`.

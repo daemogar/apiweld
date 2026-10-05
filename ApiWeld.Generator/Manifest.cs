@@ -38,10 +38,16 @@ public sealed partial record Manifest
 	/// <summary>Base-name overrides, keyed by description file stem or component schema name.</summary>
 	public IReadOnlyDictionary<string, string> Names { get; init; } = new Dictionary<string, string>();
 
+	/// <summary>Singulars for plurals the built-in rules get wrong, keyed by the lowercase plural.</summary>
+	public IReadOnlyDictionary<string, string> Singulars { get; init; } = new Dictionary<string, string>();
+
 	[GeneratedRegex("^[A-Za-z_][A-Za-z0-9_]*$")]
 	private static partial Regex IdentifierPattern();
 
-	static readonly string[] Keys = ["descriptions", "namespace", "client", "output", "basePaths", "paging", "names"];
+	[GeneratedRegex("^[A-Za-z]+$")]
+	private static partial Regex WordPattern();
+
+	static readonly string[] Keys = ["descriptions", "namespace", "client", "output", "basePaths", "paging", "names", "singulars"];
 
 	static readonly string[] PagingKeys = ["offset", "limit", "totalHeader"];
 
@@ -90,6 +96,15 @@ public sealed partial record Manifest
 					? name
 					: throw new ManifestException($"\"names\".\"{key}\" must be a valid C# identifier.");
 
+		var singulars = new Dictionary<string, string>(StringComparer.Ordinal);
+
+		if (Section(root, "singulars") is { } plurals)
+			foreach (var (plural, value) in plurals)
+				singulars[plural.ToLowerInvariant()] = WordPattern().IsMatch(plural) && value is JsonValue word
+					&& word.TryGetValue<string>(out var singular) && WordPattern().IsMatch(singular)
+						? singular
+						: throw new ManifestException($"\"singulars\".\"{plural}\" must map one word to one word.");
+
 		var paging = Section(root, "paging");
 
 		if (paging?.Select(pair => pair.Key).FirstOrDefault(key => !PagingKeys.Contains(key)) is { } unknownPaging)
@@ -107,7 +122,8 @@ public sealed partial record Manifest
 				Text(paging, "offset") ?? defaults.Offset,
 				Text(paging, "limit") ?? defaults.Limit,
 				Text(paging, "totalHeader") ?? defaults.TotalHeader),
-			Names = names
+			Names = names,
+			Singulars = singulars
 		};
 	}
 

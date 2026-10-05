@@ -49,6 +49,8 @@ public class ManifestTests
 	[InlineData("""{ "descriptions": ["a.json"], "namespace": "Example", "client": "C", "names": ["a"] }""", "\"names\" must be an object.")]
 	[InlineData("""{ "descriptions": ["a.json"], "namespace": "Example", "client": "C", "basepaths": ["/api"] }""", "unknown key \"basepaths\".")]
 	[InlineData("""{ "descriptions": ["a.json"], "namespace": "Example", "client": "C", "paging": { "skip": "s" } }""", "unknown key \"paging\".\"skip\".")]
+	[InlineData("""{ "descriptions": ["a.json"], "namespace": "Example", "client": "C", "singulars": { "octopi": "sea octopus" } }""", "\"singulars\".\"octopi\" must map one word to one word.")]
+	[InlineData("""{ "descriptions": ["a.json"], "namespace": "Example", "client": "C", "singulars": { "octopi": 3 } }""", "\"singulars\".\"octopi\" must map one word to one word.")]
 	[InlineData("""[ ]""", "the manifest must be a JSON object.")]
 	public void Names_the_first_problem(string json, string message)
 	{
@@ -61,6 +63,14 @@ public class ManifestTests
 		var manifest = Manifest.Parse("""{ "$schema": "https://example.test/apiweld.schema.json", "descriptions": ["a.json"], "namespace": "Example", "client": "C" }""");
 
 		Assert.Equal("C", manifest.Client);
+	}
+
+	[Fact]
+	public void Reads_singulars_keyed_by_the_lowercase_plural()
+	{
+		var manifest = Manifest.Parse("""{ "descriptions": ["a.json"], "namespace": "Example", "client": "C", "singulars": { "Octopi": "octopus" } }""");
+
+		Assert.Equal("octopus", manifest.Singulars["octopi"]);
 	}
 
 	[Fact]

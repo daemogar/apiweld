@@ -31,6 +31,22 @@ public class NamingTests
 	}
 
 	[Fact]
+	public void Names_inline_array_items_with_the_manifest_singulars()
+	{
+		const string show = """
+			{ "type": "object", "properties": { "octopi": { "type": "array", "items": {
+				"type": "object", "properties": { "name": { "type": "string" } } } } } }
+			""";
+		var manifest = Plain with { Singulars = new Dictionary<string, string> { ["octopi"] = "octopus" } };
+
+		var (model, diagnostics) = Descriptions.Resolve(manifest,
+			("shows.json", Descriptions.Document($$"""{ "/api/shows/{id}": { "get": {{Descriptions.Returns("application/vnd.example.v1+json", show)}} } }""")));
+
+		Assert.Empty(diagnostics);
+		Assert.Equal(new[] { "ShowV1OctopusResponse", "ShowV1Response" }, Names(model));
+	}
+
+	[Fact]
 	public void Merges_identical_shapes_across_files_under_the_shortest_name()
 	{
 		const string place = """{ "type": "object", "properties": { "country": { "type": "string" } } }""";

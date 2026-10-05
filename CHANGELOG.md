@@ -54,3 +54,6 @@
   does not compile.
 - `ApiWeld.Generator`: the manifest refuses unknown keys, a `paging` or `names` that is not an
   object, and C# keywords as `client`, a `namespace` part or a `names` value.
+- `ApiWeld.Generator`: common irregular plurals (`people`, `series`, `analyses`, `warehouses`, …)
+  now become proper singular type names, and the manifest's new `singulars` map fixes any other
+  word — including the item type of an inline array, which `names` cannot reach.
