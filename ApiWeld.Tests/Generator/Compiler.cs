@@ -24,7 +24,7 @@ static class Compiler
 			"Generated" + Guid.NewGuid().ToString("N"),
 			sources.Select(source => CSharpSyntaxTree.ParseText(source.Source, parse, source.Path)),
 			References,
-			new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, nullableContextOptions: NullableContextOptions.Enable));
+			new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, nullableContextOptions: NullableContextOptions.Enable, warningLevel: 9999));
 
 		using var image = new MemoryStream();
 		var result = compilation.Emit(image, xmlDocumentationStream: new MemoryStream());
