@@ -63,7 +63,7 @@ public sealed partial class ApiTransport
 	{
 		var index = 0;
 		var url = Placeholder().Replace(template.TrimStart('/'), _ => index < path.Count
-			? Uri.EscapeDataString(path[index++])
+			? Segment(template, path[index++])
 			: throw new ArgumentException($"The template {template} needs more than the {path.Count} path values given."));
 
 		if (index != path.Count)
@@ -74,4 +74,9 @@ public sealed partial class ApiTransport
 
 		return url + "?" + string.Join('&', query.Select(pair => Uri.EscapeDataString(pair.Key) + "=" + Uri.EscapeDataString(pair.Value)));
 	}
+
+	/// <summary>One escaped path value; empty, <c>.</c> and <c>..</c> are refused because they would address a different resource.</summary>
+	static string Segment(string template, string value) => value is "" or "." or ".."
+		? throw new ArgumentException($"The path value \"{value}\" for template {template} would address a different resource.")
+		: Uri.EscapeDataString(value);
 }

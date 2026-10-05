@@ -41,6 +41,17 @@ public class RequestTests
 		Assert.Throws<ArgumentException>(() => Transport.CreateRequest(Get, ["1", "2"]));
 	}
 
+	[Theory]
+	[InlineData("")]
+	[InlineData(".")]
+	[InlineData("..")]
+	public void Refuses_a_path_value_that_would_change_the_resource(string value)
+	{
+		var exception = Assert.Throws<ArgumentException>(() => Transport.CreateRequest(Get, [value]));
+
+		Assert.Contains("path value", exception.Message);
+	}
+
 	[Fact]
 	public void Writes_query_parameters_and_skips_null_ones()
 	{
