@@ -28,5 +28,5 @@
   dropped, parameter segments merged by position); each operation's version is read from its
   success media type and chosen in code (`Api.Widgets[id].V2.GetAsync()`); identical shapes
   merge across files, named `{Root}{Version}{Path}{Request|Response}`; paged lists get
-  `GetAsync`, `EnumerateAsync` and `GetPagedAsync`. Output is deterministic, and only files the
-  tool generated are ever replaced or deleted. See the README's "Generating a client".
+  `GetAsync`, `EnumerateAsync` and `GetPagedAsync`. Output is deterministic, and only files
+  carrying the tool's own two-line header are ever replaced or deleted. See the README's "Generating a client".
