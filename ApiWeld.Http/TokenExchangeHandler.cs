@@ -23,7 +23,7 @@ public sealed class TokenExchangeHandler(TokenSource source) : DelegatingHandler
 		response.Dispose();
 		source.Invalidate(token);
 
-		var retry = await CloneAsync(request, cancellationToken).ConfigureAwait(false);
+		using var retry = await CloneAsync(request, cancellationToken).ConfigureAwait(false);
 		retry.Headers.Authorization = new AuthenticationHeaderValue("Bearer", await source.GetAsync(cancellationToken).ConfigureAwait(false));
 
 		return await base.SendAsync(retry, cancellationToken).ConfigureAwait(false);

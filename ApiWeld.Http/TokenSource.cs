@@ -53,7 +53,7 @@ public sealed class TokenSource(TokenExchangeOptions options, HttpClient exchang
 		using var request = new HttpRequestMessage(HttpMethod.Post, endpoint);
 		request.Headers.Authorization = new AuthenticationHeaderValue(options.Scheme, options.ApiKey);
 
-		using var response = await exchangeClient.SendAsync(request, cancellationToken).ConfigureAwait(false);
+		using var response = await SendAsync(request, cancellationToken).ConfigureAwait(false);
 
 		if (!response.IsSuccessStatusCode)
 			throw new TokenExchangeException($"Token exchange at {options.Endpoint} failed with {(int)response.StatusCode} {response.StatusCode}.");
@@ -64,6 +64,20 @@ public sealed class TokenSource(TokenExchangeOptions options, HttpClient exchang
 		return string.IsNullOrEmpty(value)
 			? throw new TokenExchangeException($"Token exchange at {options.Endpoint} returned no token.")
 			: value;
+	}
+
+	/// <summary>Sends the exchange; a failure to complete it becomes <see cref="TokenExchangeException"/>, but the caller's own cancellation passes through.</summary>
+	async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+	{
+		try
+		{
+			return await exchangeClient.SendAsync(request, cancellationToken).ConfigureAwait(false);
+		}
+		catch (Exception exception) when (exception is HttpRequestException
+			|| (exception is OperationCanceledException && !cancellationToken.IsCancellationRequested))
+		{
+			throw new TokenExchangeException($"Token exchange at {options.Endpoint} could not be completed: {exception.Message}", exception);
+		}
 	}
 
 	string? ReadProperty(string body)

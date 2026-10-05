@@ -273,7 +273,11 @@ it as `Authorization: Bearer <token>`.
 The token is cached. When it is a JWT, it is replaced `RefreshMargin` before its `exp` claim;
 otherwise it is kept for `FallbackLifetime`. A 401 response invalidates the cached token and
 retries the request exactly once with a fresh one, replaying the same body. A failed exchange
-throws `TokenExchangeException` naming the endpoint and status — never the key.
+throws `TokenExchangeException` naming the endpoint and status — never the key —
+and so does an exchange that cannot be completed at all (the endpoint unreachable, or the request
+timing out), with the underlying failure as its inner exception; cancelling the call itself is
+not wrapped. Concurrent requests share one exchange: while a token is being fetched, every other
+request waits for it instead of starting its own.
 
 ### Registration
 
