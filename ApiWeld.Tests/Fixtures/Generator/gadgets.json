@@ -1,0 +1,29 @@
+{
+  "openapi": "3.0.1",
+  "info": { "title": "Gadgets", "version": "1" },
+  "paths": {
+    "/api/gadgets": {
+      "get": {
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "code": { "type": "string" },
+                      "dimensions": { "type": "object", "properties": { "width": { "type": "number" }, "height": { "type": "number" } } }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": { "schemas": {} }
+}

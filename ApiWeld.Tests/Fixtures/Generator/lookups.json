@@ -1,0 +1,32 @@
+{
+  "openapi": "3.0.1",
+  "info": { "title": "Lookups", "version": "1" },
+  "paths": {
+    "/api/lookups": {
+      "get": {
+        "responses": {
+          "200": { "content": { "application/vnd.example.v1+json": { "schema": { "type": "array", "items": { "$ref": "#/components/schemas/lookup" } } } } }
+        }
+      }
+    },
+    "/query/lookups": {
+      "post": {
+        "requestBody": {
+          "content": {
+            "application/vnd.example.v1+json": {
+              "schema": { "type": "object", "properties": { "codes": { "type": "array", "items": { "type": "string" } } } }
+            }
+          }
+        },
+        "responses": {
+          "200": { "content": { "application/vnd.example.v1+json": { "schema": { "type": "array", "items": { "$ref": "#/components/schemas/lookup" } } } } }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "lookup": { "type": "object", "properties": { "code": { "type": "string" }, "label": { "type": "string" } } }
+    }
+  }
+}
