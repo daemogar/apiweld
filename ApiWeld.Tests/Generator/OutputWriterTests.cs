@@ -60,6 +60,49 @@ public class OutputWriterTests : IDisposable
 	}
 
 	[Fact]
+	public void Refuses_a_relative_path_that_escapes_the_output_folder()
+	{
+		var diagnostics = OutputWriter.Write(Path.Combine(folder, "out"), [Generated("../escape.g.cs"), Generated("A.g.cs")]);
+
+		var error = Assert.Single(diagnostics);
+		Assert.Equal(Severity.Error, error.Severity);
+		Assert.Contains("escape.g.cs", error.Message);
+		Assert.False(File.Exists(At("escape.g.cs")));
+		Assert.False(File.Exists(At("out/A.g.cs")));
+	}
+
+	[Fact]
+	public void Refuses_a_sibling_folder_sharing_the_output_folders_prefix()
+	{
+		var diagnostics = OutputWriter.Write(Path.Combine(folder, "out"), [Generated("../out2/A.g.cs")]);
+
+		Assert.Equal(Severity.Error, Assert.Single(diagnostics).Severity);
+		Assert.False(File.Exists(At("out2/A.g.cs")));
+	}
+
+	[Fact]
+	public void Refuses_an_absolute_path()
+	{
+		var absolute = At("elsewhere/A.g.cs");
+
+		var diagnostics = OutputWriter.Write(Path.Combine(folder, "out"), [Generated(absolute)]);
+
+		Assert.Equal(Severity.Error, Assert.Single(diagnostics).Severity);
+		Assert.False(File.Exists(absolute));
+	}
+
+	[Fact]
+	public void Refuses_two_paths_differing_only_in_case()
+	{
+		var diagnostics = OutputWriter.Write(folder, [Generated("Models/A.g.cs"), Generated("Models/a.g.cs")]);
+
+		var error = Assert.Single(diagnostics);
+		Assert.Equal(Severity.Error, error.Severity);
+		Assert.Contains("a.g.cs", error.Message);
+		Assert.False(Directory.Exists(At("Models")));
+	}
+
+	[Fact]
 	public void Leaves_an_unchanged_file_untouched()
 	{
 		OutputWriter.Write(folder, [Generated("A.g.cs")]);

@@ -179,7 +179,8 @@ one file per path under `Paths/`, and one per type under `Models/`. Every file s
 identical input — so regenerating without changes leaves nothing to commit, and a file whose
 content has not changed is not rewritten at all. Generated files left over from an earlier run
 are deleted, but only files carrying that header: the tool refuses to overwrite a file without
-it and never deletes one.
+it and never deletes one. It also refuses, writing nothing, any output path that lies outside
+`output` or that differs from another only in case.
 
 The generated half of the client derives from `ApiClient` and declares no constructor; the
 consumer's own half declares one (see "Registration"). Hand-written operations go in further

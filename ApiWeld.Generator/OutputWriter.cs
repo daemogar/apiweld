@@ -14,17 +14,25 @@ public static class OutputWriter
 	/// <summary>Writes <paramref name="files"/> under <paramref name="directory"/>; returns errors and writes nothing when a target was not generated.</summary>
 	public static IReadOnlyList<Diagnostic> Write(string directory, IReadOnlyList<GeneratedFile> files)
 	{
-		var targets = files.ToDictionary(
-			file => Path.GetFullPath(Path.Combine(directory, file.Path)),
-			file => file.Content,
-			StringComparer.OrdinalIgnoreCase);
+		var root = Path.TrimEndingDirectorySeparator(Path.GetFullPath(directory)) + Path.DirectorySeparatorChar;
+		var targets = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+		var errors = new List<Diagnostic>();
 
-		var errors = targets.Keys
+		foreach (var file in files)
+		{
+			var target = Path.GetFullPath(Path.Combine(root, file.Path));
+
+			if (!target.StartsWith(root, StringComparison.OrdinalIgnoreCase))
+				errors.Add(new(Severity.Error, $"{file.Path}: lies outside the output folder."));
+			else if (!targets.TryAdd(target, file.Content))
+				errors.Add(new(Severity.Error, $"{file.Path}: names the same file as another output path, differing only in case."));
+		}
+
+		errors.AddRange(targets.Keys
 			.Where(File.Exists)
 			.Where(target => !IsGenerated(target))
 			.Order(StringComparer.Ordinal)
-			.Select(target => new Diagnostic(Severity.Error, $"{target}: exists and was not generated; move it out of the output folder."))
-			.ToList();
+			.Select(target => new Diagnostic(Severity.Error, $"{target}: exists and was not generated; move it out of the output folder.")));
 
 		if (errors.Count > 0)
 			return errors;
