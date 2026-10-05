@@ -30,3 +30,8 @@
   merge across files, named `{Root}{Version}{Path}{Request|Response}`; paged lists get
   `GetAsync`, `EnumerateAsync` and `GetPagedAsync`. Output is deterministic, and only files
   carrying the tool's own two-line header are ever replaced or deleted. See the README's "Generating a client".
+
+### Fixed
+
+- `ApiWeld.Http`: a whole number written as `3.0` or `1e2` now reads into an integer property,
+  and a number that does not fit its property reads as `null` instead of failing the response.

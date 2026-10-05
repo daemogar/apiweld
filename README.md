@@ -220,6 +220,10 @@ silently drops the value. The runtime's serializer options coerce instead:
 - A JSON number or boolean read into a string yields its raw JSON text — `2026`, `1.50`, `true`.
 - JSON text read into a number or boolean is parsed with the invariant culture; text that does
   not parse becomes `null`.
+- A JSON number read into an integer is accepted when its value is whole, whatever its form —
+  `3.0` and `1e2` read as `3` and `100`. A number that does not fit the property (a fraction or
+  an out-of-range value for an integer, any number for a boolean) becomes `null` like unparseable
+  text, so one odd value never fails a whole response.
 - Property names stay case-sensitive, so a field the description misnames is not quietly matched
   to the wrong property; it lands in the model's `AdditionalData`, where it can be seen.
 

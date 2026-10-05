@@ -46,6 +46,10 @@ abstract class TolerantScalarConverter<T> : JsonConverter<T> where T : struct
 		if (TryReadNative(ref reader, out var value))
 			return value;
 
+		// A number in a form the native read refuses, such as 3.0 for an integer, is read like text.
+		if (reader.TokenType == JsonTokenType.Number)
+			return TryParse(TolerantStringConverter.ReadText(ref reader)!, out var coerced) ? coerced : null;
+
 		throw new JsonException($"Cannot read a JSON {reader.TokenType} as {typeof(T).Name}.");
 	}
 
@@ -80,7 +84,16 @@ sealed class TolerantInt32Converter : TolerantScalarConverter<int>
 		return reader.TokenType == JsonTokenType.Number && reader.TryGetInt32(out value);
 	}
 
-	protected override bool TryParse(string text, out int value) => int.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out value);
+	protected override bool TryParse(string text, out int value)
+	{
+		if (int.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out value))
+			return true;
+
+		var fits = WholeNumber.TryParse(text, out var number) && number >= int.MinValue && number <= int.MaxValue;
+		value = fits ? (int)number : 0;
+
+		return fits;
+	}
 
 	protected override void WriteNative(Utf8JsonWriter writer, int value) => writer.WriteNumberValue(value);
 }
@@ -94,7 +107,16 @@ sealed class TolerantInt64Converter : TolerantScalarConverter<long>
 		return reader.TokenType == JsonTokenType.Number && reader.TryGetInt64(out value);
 	}
 
-	protected override bool TryParse(string text, out long value) => long.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out value);
+	protected override bool TryParse(string text, out long value)
+	{
+		if (long.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out value))
+			return true;
+
+		var fits = WholeNumber.TryParse(text, out var number) && number >= long.MinValue && number <= long.MaxValue;
+		value = fits ? (long)number : 0;
+
+		return fits;
+	}
 
 	protected override void WriteNative(Utf8JsonWriter writer, long value) => writer.WriteNumberValue(value);
 }
@@ -139,4 +161,11 @@ sealed class TolerantBooleanConverter : TolerantScalarConverter<bool>
 	protected override bool TryParse(string text, out bool value) => bool.TryParse(text, out value);
 
 	protected override void WriteNative(Utf8JsonWriter writer, bool value) => writer.WriteBooleanValue(value);
+}
+
+/// <summary>Parses number text whose value is whole, whatever its form: <c>3.0</c> and <c>1e2</c> as well as <c>3</c>.</summary>
+static class WholeNumber
+{
+	public static bool TryParse(string text, out decimal value)
+		=> decimal.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out value) && value == decimal.Truncate(value);
 }
