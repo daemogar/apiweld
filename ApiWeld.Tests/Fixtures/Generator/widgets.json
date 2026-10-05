@@ -35,7 +35,19 @@
         "requestBody": { "content": { "application/vnd.example.v2+json": { "schema": { "$ref": "#/components/schemas/new-widget" } } } },
         "responses": { "200": { "content": { "application/vnd.example.v2+json": { "schema": { "$ref": "#/components/schemas/widget" } } } } }
       },
-      "delete": { "responses": { "204": { "description": "Deleted." } } }
+      "delete": { "responses": { "204": { "description": "Deleted." } } },
+      "patch": {
+        "parameters": [ { "name": "notify", "in": "query", "description": "Whether watchers are told.", "schema": { "type": "boolean" } } ],
+        "requestBody": { "content": { "application/vnd.example.v2+json": { "schema": { "$ref": "#/components/schemas/new-widget" } } } },
+        "responses": { "200": { "content": { "application/vnd.example.v2+json": { "schema": { "$ref": "#/components/schemas/widget" } } } } }
+      }
+    },
+    "/api/widgets/{id}/history": {
+      "parameters": [ { "name": "id", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } } ],
+      "get": {
+        "parameters": [ { "name": "since", "in": "query", "schema": { "type": "string", "format": "date-time" } } ],
+        "responses": { "200": { "content": { "application/vnd.example.v2+json": { "schema": { "type": "array", "items": { "$ref": "#/components/schemas/widget" } } } } } }
+      }
     }
   },
   "components": {

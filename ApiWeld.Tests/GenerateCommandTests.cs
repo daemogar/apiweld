@@ -49,7 +49,7 @@ public class GenerateCommandTests : IDisposable
 		var (code, output, error) = Run("generate", Manifest(Valid));
 
 		Assert.Equal(0, code);
-		Assert.Equal("ExampleClient: wrote 17 files to Generated.", output.Trim());
+		Assert.Equal("ExampleClient: wrote 18 files to Generated.", output.Trim());
 		Assert.Contains("warning:", error);
 		Assert.True(File.Exists(Path.Combine(folder, "Generated", "ExampleClient.g.cs")));
 		Assert.True(File.Exists(Path.Combine(folder, "Generated", "Paths", "WidgetsItemParts.g.cs")));
