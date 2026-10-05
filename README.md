@@ -315,7 +315,7 @@ validated on first use (and at start-up when the host runs start-up validation).
 | `ApiWeld.Http` | The runtime generated clients reference; see "The runtime". |
 | `ApiWeld.Cli` | A command-line tool, installed as a .NET tool under the command `apiweld`, with `normalize` and `generate` commands. |
 
-Both are licensed AGPL-3.0-or-later; see [`LICENSE.txt`](LICENSE.txt).
+All four are licensed AGPL-3.0-or-later; see [`LICENSE.txt`](LICENSE.txt).
 
 ## Installing and running the tool
 
