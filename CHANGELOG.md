@@ -23,3 +23,10 @@
   repeat guard instead of a request cap, reads mismatched JSON kinds tolerantly, trades an API
   key for a cached bearer token with one retry on 401, and registers a client with
   `AddApiWeldClient<TClient>`. See the README's "The runtime" section.
+- `ApiWeld.Generator` and `apiweld generate <manifest>`: generate one typed C# client and one
+  merged model set from any number of OpenAPI descriptions. All paths share one tree (base paths
+  dropped, parameter segments merged by position); each operation's version is read from its
+  success media type and chosen in code (`Api.Widgets[id].V2.GetAsync()`); identical shapes
+  merge across files, named `{Root}{Version}{Path}{Request|Response}`; paged lists get
+  `GetAsync`, `EnumerateAsync` and `GetPagedAsync`. Output is deterministic, and only files the
+  tool generated are ever replaced or deleted. See the README's "Generating a client".

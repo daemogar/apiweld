@@ -1,9 +1,10 @@
 # ApiWeld
 
-ApiWeld generates typed C# HTTP clients from OpenAPI descriptions. It is a normalizer plus a
-small command-line tool: given a description, it produces a smaller, more regular version of it
-that a code generator — including a later ApiWeld package — can turn into a client whose shapes
-are easy to map onto hand-written models.
+ApiWeld generates typed C# HTTP clients from OpenAPI descriptions. It is a normalizer, a client
+generator, a small runtime the generated clients call, and a command-line tool that drives the
+first two. The normalizer turns a description into a smaller, more regular version of itself; the
+generator turns one or more descriptions into a single typed client whose shapes are easy to map
+onto hand-written models.
 
 ## Why normalization exists
 
@@ -302,7 +303,9 @@ validated on first use (and at start-up when the host runs start-up validation).
 | Package | What it is |
 | --- | --- |
 | `ApiWeld.Core` | The normalizer itself: a library over the description's JSON tree. No dependencies beyond the shared framework. |
-| `ApiWeld.Cli` | A command-line tool, installed as a .NET tool under the command `apiweld`, that reads a description from disk, normalizes it, and writes the result. |
+| `ApiWeld.Generator` | The client generator: reads a manifest's descriptions and produces the files of one typed client. Depends on `ApiWeld.Core` and `ApiWeld.Http`. |
+| `ApiWeld.Http` | The runtime generated clients reference; see "The runtime". |
+| `ApiWeld.Cli` | A command-line tool, installed as a .NET tool under the command `apiweld`, with `normalize` and `generate` commands. |
 
 Both are licensed AGPL-3.0-or-later; see [`LICENSE.txt`](LICENSE.txt).
 
@@ -314,6 +317,7 @@ official release:
 ```bash
 dotnet tool install --global ApiWeld.Cli --prerelease
 apiweld normalize path/to/description.json
+apiweld generate path/to/apiweld.json
 ```
 
 ## Building from source
