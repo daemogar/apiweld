@@ -123,6 +123,51 @@ public class OutputWriterTests : IDisposable
 	}
 
 	[Fact]
+	public void Treats_a_drive_root_as_a_folder_files_can_go_in()
+	{
+		var driveRoot = Path.GetPathRoot(folder)!;
+		var root = OutputWriter.RootOf(driveRoot);
+
+		Assert.Equal(driveRoot, root);
+		Assert.True(OutputWriter.IsInside(root, Path.Combine(driveRoot, "Models", "A.g.cs")));
+	}
+
+	[Fact]
+	public void Reports_a_file_it_cannot_write_instead_of_throwing()
+	{
+		OutputWriter.Write(folder, [Generated("A.g.cs")]);
+		File.SetAttributes(At("A.g.cs"), FileAttributes.ReadOnly);
+
+		try
+		{
+			var diagnostics = OutputWriter.Write(folder, [new GeneratedFile("A.g.cs", Header + "class Changed { }\n")]);
+
+			var error = Assert.Single(diagnostics);
+			Assert.Equal(Severity.Error, error.Severity);
+			Assert.Contains("could not write", error.Message);
+		}
+		finally
+		{
+			File.SetAttributes(At("A.g.cs"), FileAttributes.Normal);
+		}
+	}
+
+	[Fact]
+	public void Removes_folders_that_deleting_stale_files_leaves_empty()
+	{
+		Put("Old/Deeper/Gone.g.cs", Header);
+		Put("Stale.g.cs", Header);
+		Directory.CreateDirectory(At("Mine"));
+
+		Assert.Empty(OutputWriter.Write(folder, [Generated("Models/A.g.cs")]));
+
+		Assert.False(Directory.Exists(At("Old")));
+		Assert.False(File.Exists(At("Stale.g.cs")));
+		Assert.True(Directory.Exists(At("Mine")));
+		Assert.True(Directory.Exists(folder));
+	}
+
+	[Fact]
 	public void Leaves_an_unchanged_file_untouched()
 	{
 		OutputWriter.Write(folder, [Generated("A.g.cs")]);

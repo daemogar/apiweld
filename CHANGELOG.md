@@ -57,3 +57,6 @@
 - `ApiWeld.Generator`: common irregular plurals (`people`, `series`, `analyses`, `warehouses`, …)
   now become proper singular type names, and the manifest's new `singulars` map fixes any other
   word — including the item type of an inline array, which `names` cannot reach.
+- `ApiWeld.Generator`: output writing reports a file it cannot read, write or delete as an error
+  instead of throwing, removes folders that stale deletion empties, and accepts an output folder
+  at a drive root.

@@ -208,7 +208,10 @@ input — so regenerating without changes leaves nothing to commit, and a file w
 not changed is not rewritten at all. Generated files left over from an earlier run are deleted,
 but only files starting with both of those lines: the tool refuses to overwrite any other file,
 including one another generator wrote, and never deletes one. It also refuses, writing nothing,
-any output path that lies outside `output` or that differs from another only in case.
+any output path that lies outside `output` or that differs from another only in case. A folder
+that deleting stale files leaves empty is removed as well (the output folder itself never is). A
+file the tool cannot read, write or delete — locked by another program, or read-only — is
+reported as an error naming it instead of stopping the run with an exception.
 
 The generated half of the client derives from `ApiClient` and declares no constructor; the
 consumer's own half declares one (see "Registration"). Hand-written operations go in further
