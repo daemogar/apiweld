@@ -71,6 +71,25 @@ public class EmissionTests
 	}
 
 	[Fact]
+	public void Compiles_nested_path_parameters_named_like_the_node_fields()
+	{
+		var get = Descriptions.Returns("application/json", Descriptions.Thing);
+		var description = Descriptions.Document($$"""
+			{
+				"/api/widgets/{id}/files/{path}": { "get": {{get}} },
+				"/api/widgets/{id}/files/{path}/parts/{transport}": { "get": {{get}} }
+			}
+			""");
+
+		var result = ClientGenerator.Generate(FixtureManifest, [new DescriptionSource("widgets.json", description)]);
+		Assert.True(result.Succeeded, string.Join("\n", result.Diagnostics));
+
+		var (_, diagnostics) = Compiler.Compile(result.Files.Select(file => (file.Path, file.Content)).Append(("Consumer.cs", Consumer)));
+
+		Assert.Empty(diagnostics);
+	}
+
+	[Fact]
 	public void Generates_identical_output_every_time()
 	{
 		var first = ClientGenerator.Generate(FixtureManifest, Fixtures()).Files;

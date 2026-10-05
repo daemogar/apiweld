@@ -39,7 +39,8 @@ internal static class PathEmitter
 				continue;
 			}
 
-			var name = Words.Identifier(Words.Camel(child.ParameterName), "value");
+			// The indexer parameter must not hide the node's own fields.
+			var name = Words.Unique(Words.Identifier(Words.Camel(child.ParameterName), "value"), new HashSet<string>(StringComparer.Ordinal) { "path", "transport" });
 
 			if (child.ParameterType == "Guid")
 			{
