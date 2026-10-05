@@ -52,3 +52,5 @@
 - `ApiWeld.Generator`: a model named like a generated navigation class or a type the generated
   code uses is reported as an error asking for a `names` entry, instead of producing code that
   does not compile.
+- `ApiWeld.Generator`: the manifest refuses unknown keys, a `paging` or `names` that is not an
+  object, and C# keywords as `client`, a `namespace` part or a `names` value.

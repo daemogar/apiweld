@@ -113,6 +113,10 @@ generated code calls the `ApiWeld.Http` runtime (see "The runtime").
 - `paging` — the names that make an operation paged; see "Page walking". Defaults as shown.
 - `names` — overrides for derived names; see "Names".
 
+Unknown keys are refused — at the top level and inside `paging` — so a misspelled setting is
+reported instead of ignored; keys starting with `$`, such as `$schema`, are allowed. `client`,
+each part of `namespace`, and every `names` value must be a C# identifier that is not a keyword.
+
 The manifest holds no version settings. Versions come from the descriptions and are chosen in
 code, at every call site.
 

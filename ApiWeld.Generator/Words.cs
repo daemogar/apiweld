@@ -21,6 +21,8 @@ internal static partial class Words
 
 	public static IReadOnlyList<string> Split(string text) => [.. Word().Matches(text).Select(match => match.Value)];
 
+	public static bool IsKeyword(string text) => Keywords.Contains(text);
+
 	public static string Pascal(string text) => string.Concat(Split(text).Select(Capitalize));
 
 	public static string Camel(string text)

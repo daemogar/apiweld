@@ -42,10 +42,25 @@ public class ManifestTests
 	[InlineData("""{ "descriptions": ["a.json"], "namespace": "Example", "client": "2C" }""", "\"client\" is not a valid C# identifier: 2C")]
 	[InlineData("""{ "descriptions": ["a.json"], "namespace": "Example", "client": "C", "names": { "x": 3 } }""", "\"names\".\"x\" must be a valid C# identifier.")]
 	[InlineData("""{ "descriptions": "a.json", "namespace": "Example", "client": "C" }""", "\"descriptions\" must be an array of strings.")]
+	[InlineData("""{ "descriptions": ["a.json"], "namespace": "Example", "client": "class" }""", "\"client\" is not a valid C# identifier: class")]
+	[InlineData("""{ "descriptions": ["a.json"], "namespace": "Example.namespace", "client": "C" }""", "\"namespace\" is not a valid C# namespace: Example.namespace")]
+	[InlineData("""{ "descriptions": ["a.json"], "namespace": "Example", "client": "C", "names": { "x": "int" } }""", "\"names\".\"x\" must be a valid C# identifier.")]
+	[InlineData("""{ "descriptions": ["a.json"], "namespace": "Example", "client": "C", "paging": "skip" }""", "\"paging\" must be an object.")]
+	[InlineData("""{ "descriptions": ["a.json"], "namespace": "Example", "client": "C", "names": ["a"] }""", "\"names\" must be an object.")]
+	[InlineData("""{ "descriptions": ["a.json"], "namespace": "Example", "client": "C", "basepaths": ["/api"] }""", "unknown key \"basepaths\".")]
+	[InlineData("""{ "descriptions": ["a.json"], "namespace": "Example", "client": "C", "paging": { "skip": "s" } }""", "unknown key \"paging\".\"skip\".")]
 	[InlineData("""[ ]""", "the manifest must be a JSON object.")]
 	public void Names_the_first_problem(string json, string message)
 	{
 		Assert.Equal(message, Assert.Throws<ManifestException>(() => Manifest.Parse(json)).Message);
+	}
+
+	[Fact]
+	public void Allows_keys_starting_with_a_dollar_sign()
+	{
+		var manifest = Manifest.Parse("""{ "$schema": "https://example.test/apiweld.schema.json", "descriptions": ["a.json"], "namespace": "Example", "client": "C" }""");
+
+		Assert.Equal("C", manifest.Client);
 	}
 
 	[Fact]
