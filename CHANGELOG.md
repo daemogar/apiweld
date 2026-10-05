@@ -60,3 +60,5 @@
 - `ApiWeld.Generator`: output writing reports a file it cannot read, write or delete as an error
   instead of throwing, removes folders that stale deletion empties, and accepts an output folder
   at a drive root.
+- `ApiWeld.Cli`: `apiweld generate` reports a manifest it cannot read and exits 1, instead of
+  stopping with an exception.

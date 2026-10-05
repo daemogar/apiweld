@@ -78,6 +78,40 @@ public class GenerateCommandTests : IDisposable
 	}
 
 	[Fact]
+	public void Prints_usage_without_a_manifest_path()
+	{
+		var (code, _, error) = Run("generate");
+
+		Assert.Equal(1, code);
+		Assert.Equal("usage: apiweld generate <path-to-apiweld.json>", error.Trim());
+	}
+
+	[Fact]
+	public void Reports_a_missing_manifest()
+	{
+		var missing = Path.Combine(folder, "nope.json");
+
+		var (code, _, error) = Run("generate", missing);
+
+		Assert.Equal(1, code);
+		Assert.Equal($"{missing}: file not found.", error.Trim());
+	}
+
+	[Fact]
+	public void Reports_a_manifest_it_cannot_read()
+	{
+		var path = Manifest(Valid);
+
+		using (new FileStream(path, FileMode.Open, FileAccess.ReadWrite, FileShare.None))
+		{
+			var (code, _, error) = Run("generate", path);
+
+			Assert.Equal(1, code);
+			Assert.StartsWith("apiweld.json: could not read — ", error.Trim());
+		}
+	}
+
+	[Fact]
 	public void Reports_a_pattern_that_matches_nothing()
 	{
 		var (code, _, error) = Run("generate", Manifest(Valid));
