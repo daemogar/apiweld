@@ -1,4 +1,5 @@
-﻿using System.Text.Json.Nodes;
+﻿using System.Text.Json;
+using System.Text.Json.Nodes;
 
 namespace ApiWeld.Generator.Model;
 
@@ -165,7 +166,7 @@ internal sealed class ShapeBuilder(DiagnosticBag diagnostics, IReadOnlyDictionar
 	static string? Description(JsonNode? schema, JsonObject document)
 		=> JsonText.String(schema, "description") ?? JsonText.String(References.Resolve(schema, document).Node, "description");
 
-	static string Quote(string text) => System.Text.Json.JsonSerializer.Serialize(text);
+	static string Quote(string text) => "\"" + JsonEncodedText.Encode(text).Value + "\"";
 
 	static string Key(TypeRef type) => type switch
 	{

@@ -1,4 +1,6 @@
-﻿using System.Text.Json.Nodes;
+﻿using System.Reflection.Metadata;
+using System.Reflection.PortableExecutable;
+using System.Text.Json.Nodes;
 
 using ApiWeld.Generator;
 using ApiWeld.Generator.Model;
@@ -29,6 +31,24 @@ public class ShapeTests
 		=> shapes.Build(JsonNode.Parse(schema), Document, context ?? Context());
 
 	static ModelType Model(TypeRef type) => Assert.IsType<ModelRef>(type).Model;
+
+	/// <summary>Reflection-based serialization fails in trimmed and AOT hosts, so the generator must not reference it.</summary>
+	[Fact]
+	public void The_generator_never_calls_the_reflection_based_serializer()
+	{
+		using var stream = File.OpenRead(typeof(ClientGenerator).Assembly.Location);
+		using var image = new PEReader(stream);
+		var metadata = image.GetMetadataReader();
+
+		var calls = metadata.MemberReferences
+			.Select(metadata.GetMemberReference)
+			.Where(member => member.Parent.Kind == HandleKind.TypeReference
+				&& metadata.GetTypeReference((TypeReferenceHandle)member.Parent) is var type
+				&& metadata.GetString(type.Namespace) == "System.Text.Json" && metadata.GetString(type.Name) == "JsonSerializer")
+			.Select(member => metadata.GetString(member.Name));
+
+		Assert.Empty(calls);
+	}
 
 	[Theory]
 	[InlineData("""{ "type": "string" }""", "string")]
