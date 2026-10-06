@@ -3,7 +3,7 @@
 namespace ApiWeld.Cli;
 
 /// <summary>The <c>apiweld generate</c> command: manifest in, generated client out.</summary>
-public static class GenerateCommand
+internal static class GenerateCommand
 {
 	const string Usage = "usage: apiweld generate <path-to-apiweld.json>";
 

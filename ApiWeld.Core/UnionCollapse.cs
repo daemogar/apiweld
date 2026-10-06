@@ -4,7 +4,7 @@ namespace ApiWeld.Core;
 
 /// <summary>One permissive schema in place of every oneOf/anyOf.</summary>
 /// <remarks>The rules and the reasoning behind them: README.md, "Union collapse rules".</remarks>
-public static class UnionCollapse
+internal static class UnionCollapse
 {
 	/// <summary>Whether a variant is a "no value here" branch rather than a shape the union offers.</summary>
 	public static bool IsAbsent(JsonNode? variant)

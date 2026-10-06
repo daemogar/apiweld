@@ -4,7 +4,7 @@ namespace ApiWeld.Core;
 
 /// <summary>One component schema in place of every identical copy of it.</summary>
 /// <remarks>Why a generator needs this, and why only referenced schemas participate: see README.md, "Deduplication rules".</remarks>
-public static class SchemaDeduplicator
+internal static class SchemaDeduplicator
 {
 	const string Reference = "#/components/schemas/";
 

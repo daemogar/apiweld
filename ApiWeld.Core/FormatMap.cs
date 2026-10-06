@@ -2,7 +2,7 @@
 
 /// <summary>Canonical spellings for formats a description may use non-standard names for.</summary>
 /// <remarks>Why this is text rather than a tree walk: see CONTRIBUTING.md, "Format substitution is text replacement".</remarks>
-public static class FormatMap
+internal static class FormatMap
 {
 	const string Pattern = "\"format\": \"{0}\"";
 
