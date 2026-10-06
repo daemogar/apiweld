@@ -31,16 +31,12 @@ discovery broke, even though the command "succeeded."
   a rule behaves — it belongs in `README.md` (product-level) or here (contributor-level), with
   `<remarks>` reduced to a one-line pointer at it. Long prose does not belong inline in source.
 
-## Format substitution is text replacement
+## Changing what the normalizer outputs
 
-Format substitution replaces the literal text `"format": "<name>"` — exactly one space after
-the colon — anywhere that literal key/value pair appears in the raw document text, including in
-non-schema values such as an `example` object, not only in schema `format` keywords, before the
-document is ever parsed. This reproduces an existing implementation's behavior
-exactly, which is why the normalizer's entry point for this rule accepts text rather than a
-parsed tree. Moving this to a tree walk is a legitimate later change, once tests prove the old
-and new behavior agree on the same inputs — until then, the literal-text match, spacing included,
-is deliberate rather than an oversight to fix.
+A change to a normalizer rule changes the generated types of every consumer. Before merging one,
+normalize a real set of descriptions with the old build and the new one, and account for every
+difference. Format substitution moved from text replacement to a tree walk this way. The two
+gave identical output on a real corpus before the text version was removed.
 
 ## No vendor or product references in tracked files
 

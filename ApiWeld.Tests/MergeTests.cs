@@ -110,9 +110,8 @@ public class MergeTests
 		Assert.Equal(2, properties.Count);
 	}
 
-	// Review Focus 1. A variant expressed as a reference is not merged — the left
-	// operand's reference survives and the right's is discarded. Pinned so the
-	// behaviour is visible; changing it is a deliberate act with a failing test.
+	// Collapse resolves references before it merges; only a reference it cannot
+	// resolve reaches Merge, and then the left operand's survives.
 	[Fact]
 	public void Keeps_only_the_first_reference_when_both_variants_are_references()
 	{
@@ -123,16 +122,46 @@ public class MergeTests
 		Assert.Equal("#/components/schemas/Left", (string?)merged["$ref"]);
 	}
 
-	// Review Focus 4. `required` intersects only when BOTH variants carry it; a list
-	// only one variant carries survives whole, in either operand order. Pinned so the
-	// behaviour is visible; changing it is a deliberate act with a failing test.
+	// A variant with no required list requires nothing, so the merge requires nothing either.
 	[Fact]
-	public void Keeps_a_required_list_only_one_variant_carries()
+	public void Drops_a_required_list_only_one_variant_carries()
 	{
 		var leftCarries = Merge("""{ "required": ["a"] }""", """{}""");
 		var rightCarries = Merge("""{}""", """{ "required": ["a"] }""");
 
-		Assert.Equal(["a"], ((JsonArray)leftCarries["required"]!).Select(p => (string?)p));
-		Assert.Equal(["a"], ((JsonArray)rightCarries["required"]!).Select(p => (string?)p));
+		Assert.False(leftCarries.ContainsKey("required"));
+		Assert.False(rightCarries.ContainsKey("required"));
+	}
+
+	[Fact]
+	public void Drops_the_type_when_the_variants_disagree()
+	{
+		var merged = Merge("""{ "type": "string" }""", """{ "type": "integer" }""");
+
+		Assert.False(merged.ContainsKey("type"));
+	}
+
+	[Fact]
+	public void Widens_an_integer_and_a_number_to_a_number()
+	{
+		var merged = Merge("""{ "type": "integer" }""", """{ "type": "number" }""");
+
+		Assert.Equal("number", (string?)merged["type"]);
+	}
+
+	[Fact]
+	public void Keeps_null_in_a_merged_type_array()
+	{
+		var merged = Merge("""{ "type": ["string", "null"], "enum": ["a"] }""", """{ "type": "string", "enum": ["a"] }""");
+
+		Assert.Equal(["string", "null"], ((JsonArray)merged["type"]!).Select(p => (string?)p));
+	}
+
+	[Fact]
+	public void Drops_a_type_array_whose_real_types_disagree()
+	{
+		var merged = Merge("""{ "type": ["string", "null"] }""", """{ "type": "integer" }""");
+
+		Assert.False(merged.ContainsKey("type"));
 	}
 }

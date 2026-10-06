@@ -153,15 +153,157 @@ public class UnionCollapseTests
 		Assert.Equal("integer", (string?)((JsonArray)result["allOf"]!)[0]!["type"]);
 	}
 
-	// Review Focus 2. A non-object variant is coerced to an empty object and
-	// contributes nothing. Pinned rather than fixed.
 	[Fact]
-	public void A_variant_that_is_not_an_object_contributes_nothing()
+	public void A_variant_that_accepts_anything_makes_the_union_accept_anything()
 	{
 		var result = Collapse("""
-			{ "oneOf": [ true, { "type": "integer" } ] }
+			{ "description": "Any value.", "oneOf": [ true, { "type": "integer" } ] }
+			""");
+
+		Assert.False(result.ContainsKey("type"));
+		Assert.Equal("Any value.", (string?)result["description"]);
+	}
+
+	[Fact]
+	public void A_variant_that_accepts_nothing_is_dropped()
+	{
+		var result = Collapse("""
+			{ "oneOf": [ false, { "type": "integer" } ] }
 			""");
 
 		Assert.Equal("integer", (string?)result["type"]);
+	}
+
+	[Fact]
+	public void Untypes_variants_of_different_scalar_types()
+	{
+		var result = Collapse("""
+			{ "oneOf": [ { "type": "string" }, { "type": "integer" } ] }
+			""");
+
+		Assert.False(result.ContainsKey("type"));
+	}
+
+	[Fact]
+	public void Collapses_a_null_type_branch_like_any_absent_branch()
+	{
+		var result = Collapse("""
+			{ "oneOf": [ { "type": "null" }, { "type": "string", "format": "date-time" } ] }
+			""");
+
+		Assert.Equal("string", (string?)result["type"]);
+		Assert.False(result.ContainsKey("format"));
+	}
+
+	[Fact]
+	public void Collapses_variants_written_with_type_arrays()
+	{
+		var result = Collapse("""
+			{ "oneOf": [ { "type": ["string", "null"], "enum": ["a"] }, { "type": "string", "enum": ["a"] } ] }
+			""");
+
+		Assert.Equal(["string", "null"], ((JsonArray)result["type"]!).Select(p => (string?)p));
+	}
+
+	[Fact]
+	public void Keeps_the_keywords_written_beside_the_union()
+	{
+		var result = Collapse("""
+			{
+			  "nullable": true, "readOnly": true, "deprecated": true, "default": "x", "example": "y",
+			  "oneOf": [ { "type": "string", "maxLength": 0 }, { "type": "string" } ]
+			}
+			""");
+
+		Assert.True((bool?)result["nullable"]);
+		Assert.True((bool?)result["readOnly"]);
+		Assert.True((bool?)result["deprecated"]);
+		Assert.Equal("x", (string?)result["default"]);
+		Assert.Equal("y", (string?)result["example"]);
+		Assert.Equal("string", (string?)result["type"]);
+	}
+
+	[Fact]
+	public void Adds_the_properties_written_beside_the_union_to_the_variants()
+	{
+		var result = Collapse("""
+			{
+			  "type": "object", "required": ["id"], "properties": { "id": { "type": "string" } },
+			  "oneOf": [ { "properties": { "a": { "type": "string" } } }, { "properties": { "b": { "type": "string" } } } ]
+			}
+			""");
+
+		Assert.Equal(["id", "a", "b"], ((JsonObject)result["properties"]!).Select(p => p.Key));
+		Assert.Equal(["id"], ((JsonArray)result["required"]!).Select(p => (string?)p));
+	}
+
+	[Fact]
+	public void Collapses_a_oneOf_and_an_anyOf_on_the_same_schema()
+	{
+		var result = Collapse("""
+			{
+			  "oneOf": [ { "maxProperties": 0 }, { "type": "object", "properties": { "a": { "type": "string" } } } ],
+			  "anyOf": [ { "properties": { "b": { "type": "string" } } }, { "properties": { "c": { "type": "string" } } } ]
+			}
+			""");
+
+		Assert.False(result.ContainsKey("oneOf"));
+		Assert.False(result.ContainsKey("anyOf"));
+		Assert.Equal(["a", "b", "c"], ((JsonObject)result["properties"]!).Select(p => p.Key).Order());
+	}
+
+	const string Referenced = """
+		{
+		  "paths": { "/a": { "get": { "responses": { "200": { "content": { "application/json": { "schema": UNION } } } } } } },
+		  "components": {
+		    "schemas": {
+		      "A": { "type": "object", "required": ["a"], "properties": { "a": { "type": "string" } } },
+		      "B": { "type": "object", "properties": { "b": { "type": "string" } } },
+		      "Node": { "type": "object", "properties": { "next": { "oneOf": [ { "$ref": "#/components/schemas/Node" }, { "$ref": "#/components/schemas/B" } ] } } }
+		    }
+		  }
+		}
+		""";
+
+	static JsonObject CollapseUnion(string union)
+	{
+		var document = (JsonObject)UnionCollapse.Collapse(JsonNode.Parse(Referenced.Replace("UNION", union)))!;
+
+		return (JsonObject)document["paths"]!["/a"]!["get"]!["responses"]!["200"]!["content"]!["application/json"]!["schema"]!;
+	}
+
+	[Fact]
+	public void Merges_referenced_variants_by_the_shapes_they_name()
+	{
+		var result = CollapseUnion("""{ "oneOf": [ { "$ref": "#/components/schemas/A" }, { "$ref": "#/components/schemas/B" } ] }""");
+
+		Assert.False(result.ContainsKey("$ref"));
+		Assert.Equal(["a", "b"], ((JsonObject)result["properties"]!).Select(p => p.Key));
+		Assert.False(result.ContainsKey("required"));
+	}
+
+	[Fact]
+	public void Merges_a_referenced_variant_with_an_inline_one()
+	{
+		var result = CollapseUnion("""{ "oneOf": [ { "$ref": "#/components/schemas/A" }, { "type": "object", "properties": { "c": { "type": "string" } } } ] }""");
+
+		Assert.False(result.ContainsKey("$ref"));
+		Assert.Equal(["a", "c"], ((JsonObject)result["properties"]!).Select(p => p.Key));
+	}
+
+	[Fact]
+	public void Keeps_a_lone_surviving_reference_as_a_reference()
+	{
+		var result = CollapseUnion("""{ "oneOf": [ { "maxProperties": 0 }, { "$ref": "#/components/schemas/A" } ] }""");
+
+		Assert.Equal("#/components/schemas/A", (string?)result["$ref"]);
+	}
+
+	[Fact]
+	public void Stops_at_a_union_that_refers_to_itself()
+	{
+		var result = CollapseUnion("""{ "$ref": "#/components/schemas/Node" }""");
+
+		Assert.Equal("#/components/schemas/Node", (string?)result["$ref"]);
 	}
 }

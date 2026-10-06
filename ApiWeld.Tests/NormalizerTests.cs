@@ -46,7 +46,7 @@ public class NormalizerTests
 	}
 
 	[Fact]
-	public void Applies_format_substitution_before_parsing()
+	public void Applies_format_substitution()
 	{
 		var result = OpenApiNormalizer.Normalize(Fixture("composite.json"), "widgets");
 		var id = result["components"]!["schemas"]!["widgets_get_response"]!["properties"]!["id"]!;

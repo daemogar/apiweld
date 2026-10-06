@@ -75,7 +75,7 @@ internal sealed class ShapeBuilder(DiagnosticBag diagnostics, IReadOnlyDictionar
 		if (node is null)
 			return ScalarRef.Json;
 
-		var type = JsonText.String(node, "type");
+		var type = JsonText.Type(node);
 
 		if (node["enum"] is JsonArray values && (type is null or "string")
 			&& values.All(value => value is null || (value is JsonValue text && text.TryGetValue<string>(out _))))

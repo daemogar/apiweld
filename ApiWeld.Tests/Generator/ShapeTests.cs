@@ -61,6 +61,9 @@ public class ShapeTests
 	[InlineData("""{ "type": "boolean" }""", "bool")]
 	[InlineData("""{ }""", "JsonElement")]
 	[InlineData("""{ "type": "object" }""", "JsonElement")]
+	[InlineData("""{ "type": ["string", "null"], "format": "uuid" }""", "Guid")]
+	[InlineData("""{ "type": ["null", "integer"] }""", "int")]
+	[InlineData("""{ "type": ["string", "integer"] }""", "JsonElement")]
 	public void Maps_scalars(string schema, string expected)
 	{
 		Assert.Equal(expected, Assert.IsType<ScalarRef>(Build(Builder().Shapes, schema)).Name);

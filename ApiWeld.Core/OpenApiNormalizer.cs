@@ -11,16 +11,15 @@ public static class OpenApiNormalizer
 	/// The description with formats canonicalized, unions collapsed and identical
 	/// component schemas folded onto one name.
 	/// </summary>
-	/// <param name="documentText">The description as written. Format substitution is
-	/// applied to the text, so this takes the document rather than a parsed tree.</param>
+	/// <param name="documentText">The description as written.</param>
 	/// <param name="resourceName">Names the primary get-response, which wins when
 	/// identical schemas are folded.</param>
 	public static JsonObject Normalize(string documentText, string resourceName)
 	{
-		var mapped = FormatMap.Apply(documentText);
-
-		if (JsonNode.Parse(mapped) is not JsonObject root)
+		if (JsonNode.Parse(documentText) is not JsonObject root)
 			throw new JsonException("The description's root is not a JSON object.");
+
+		FormatMap.Apply(root);
 
 		var collapsed = (JsonObject)UnionCollapse.Collapse(root)!;
 
