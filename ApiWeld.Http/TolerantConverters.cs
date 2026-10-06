@@ -167,5 +167,27 @@ sealed class TolerantBooleanConverter : TolerantScalarConverter<bool>
 static class WholeNumber
 {
 	public static bool TryParse(string text, out decimal value)
-		=> decimal.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out value) && value == decimal.Truncate(value);
+		=> decimal.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out value) && value == decimal.Truncate(value)
+			&& DigitsAreWhole(text.AsSpan().Trim());
+
+	/// <summary>Whether every digit after the point, once the exponent is applied, is zero; decimal parsing rounds past 28 digits and underflows to zero, so it cannot tell.</summary>
+	static bool DigitsAreWhole(ReadOnlySpan<char> text)
+	{
+		var exponent = 0;
+
+		if (text.IndexOfAny('e', 'E') is var e and >= 0)
+		{
+			if (!int.TryParse(text[(e + 1)..], NumberStyles.AllowLeadingSign, CultureInfo.InvariantCulture, out exponent))
+				return false;
+
+			text = text[..e];
+		}
+
+		var point = text.IndexOf('.');
+		var whole = (point < 0 ? text : text[..point]).TrimStart("+-");
+		var digits = string.Concat(whole, point < 0 ? [] : text[(point + 1)..]);
+		var at = Math.Max(0, (long)whole.Length + exponent);
+
+		return at >= digits.Length || digits.AsSpan((int)at).IndexOfAnyExcept('0') < 0;
+	}
 }

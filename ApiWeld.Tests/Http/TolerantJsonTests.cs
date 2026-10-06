@@ -74,6 +74,16 @@ public class TolerantJsonTests
 		Assert.Equal(3L, sample.Big);
 	}
 
+	[Theory]
+	[InlineData("""{ "count": 3.00000000000000000000000000001 }""", null)]
+	[InlineData("""{ "count": "3.00000000000000000000000000001" }""", null)]
+	[InlineData("""{ "count": 1e-400 }""", null)]
+	[InlineData("""{ "count": 300e-2 }""", 3)]
+	public void Reads_a_number_as_whole_only_when_every_digit_after_the_point_is_zero(string json, int? expected)
+	{
+		Assert.Equal(expected, Read(json).Count);
+	}
+
 	[Fact]
 	public void Turns_a_number_that_does_not_fit_into_null()
 	{
