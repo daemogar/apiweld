@@ -11,7 +11,7 @@ on:
       version:
         description: 'Official release version (plain SemVer, e.g. 1.0.0)'
         required: true
-        default: '0.1.0'
+        default: '1.0.0'
 
 env:
   CORE_PROJECT: ApiWeld.Core/ApiWeld.Core.csproj
@@ -22,7 +22,7 @@ env:
   # The next planned official release. Betas are cut as <NEXT_VERSION>-beta.<run#>
   # so they always compare BELOW the official they precede. Keep in sync with the
   # workflow_dispatch default above; bump both right after each official ships.
-  NEXT_VERSION: '0.1.0'
+  NEXT_VERSION: '1.0.0'
 
 jobs:
   build:

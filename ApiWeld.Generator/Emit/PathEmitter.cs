@@ -124,19 +124,31 @@ internal static class PathEmitter
 		if (operation.IsPaged)
 			writer.Line($"Paging = new({CodeWriter.Literal(paging.Offset)}, {CodeWriter.Literal(paging.Limit)}, {CodeWriter.Literal(paging.TotalHeader)}),");
 
-		if (operation.Errors.Count > 0)
-		{
-			writer.Open("Errors = new Dictionary<int, ApiErrorFactory>");
+		Factories(writer, "Errors", operation.Errors);
+		Factories(writer, "ErrorRanges", operation.ErrorRanges);
 
-			foreach (var (status, type) in operation.Errors)
-				writer.Line($"[{status}] = {(TypeNames.IsClass(type) ? $"ApiResponseException<{TypeNames.Of(type)}>.Create" : "ApiResponseException.Create")},");
-
-			writer.Close(",");
-		}
+		if (operation.DefaultError is { } fallback)
+			writer.Line($"DefaultError = {Factory(fallback)},");
 
 		writer.Close(";");
 		writer.Line();
 	}
+
+	static void Factories(CodeWriter writer, string property, SortedDictionary<int, TypeRef> errors)
+	{
+		if (errors.Count == 0)
+			return;
+
+		writer.Open($"{property} = new Dictionary<int, ApiErrorFactory>");
+
+		foreach (var (status, type) in errors)
+			writer.Line($"[{status}] = {Factory(type)},");
+
+		writer.Close(",");
+	}
+
+	static string Factory(TypeRef type)
+		=> TypeNames.IsClass(type) ? $"ApiResponseException<{TypeNames.Of(type)}>.Create" : "ApiResponseException.Create";
 
 	static void Methods(CodeWriter writer, PathNode node, string member, OperationModel operation)
 	{

@@ -17,6 +17,7 @@
 
   <ItemGroup>
     <None Include="../README.md" Pack="true" PackagePath="/" />
+    <InternalsVisibleTo Include="ApiWeld.Tests" />
     <ProjectReference Include="../ApiWeld.Core/ApiWeld.Core.csproj" />
     <ProjectReference Include="../ApiWeld.Generator/ApiWeld.Generator.csproj" />
   </ItemGroup>

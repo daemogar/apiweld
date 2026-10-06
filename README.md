@@ -33,25 +33,43 @@ data, with far fewer, more mappable, generated types.
 
 ## Union collapse rules
 
-Union collapse replaces every `oneOf`/`anyOf` with a single, more permissive schema. The
-rules target OpenAPI 3.0 shapes — a bare nullable field written as `nullable: true` rather
-than a 3.1-style `type` array; a 3.1 type array (`"type": ["string", "null"]`) inside a
-`oneOf`/`anyOf` variant is not yet handled and is reported as an error rather than collapsed.
+Union collapse replaces every `oneOf`/`anyOf` with a single, more permissive schema. A type is
+read the same way whether it is written as OpenAPI 3.0's `type` plus `nullable: true` or as a
+3.1 `type` array such as `["string", "null"]`.
 
-1. Drop every *absent* branch — one with `maxProperties: 0`, an object declaring no
-   properties, a string with `maxLength: 0`, or a bare nullable string carrying no `enum`
-   and no `pattern`.
+1. Drop every *absent* branch: one with `maxProperties: 0`, a `false` schema, a `null` type,
+   an object declaring no properties, a string with `maxLength: 0`, or a bare nullable string
+   carrying no `enum` and no `pattern`.
 2. If nothing survives, keep all branches and treat the union as not emptiable.
-3. Merge the survivors pairwise: a property either variant offers survives; `required`
-   intersects only when **both** variants carry a `required` list — a `required` list only
-   one variant carries is kept whole, unchanged; and no `enum`, `pattern` or `format`
-   survives that they disagree on or that only one of them carries.
-4. If any branch was dropped and the merged result is a string, drop its `format` and
+3. A surviving `true` schema accepts anything, so the union becomes an empty schema.
+4. Merge the survivors pairwise, by shape. Each variant that is a local `$ref` is replaced by
+   the schema it names first; only a lone survivor stays a reference, so it keeps its name. A
+   reference back to a schema already being merged is left as written, which stops a union
+   that refers to itself.
+   - A property either variant offers survives.
+   - `required` keeps only what **both** variants require. A variant with no `required` list
+     requires nothing, so the merge then requires nothing.
+   - `type` survives when the variants agree on one real type. An integer and a number widen
+     to a number, and `null` is kept when either allowed it. Two different real types drop
+     `type`.
+   - No `enum`, `pattern` or `format` survives that they disagree on or that only one of them
+     carries.
+5. Keywords written beside the union apply alongside it. Its own `properties` and `required`
+   add to the merged ones. Every other keyword replaces the variants' value, so the property's
+   own `title`, `description`, `nullable`, `readOnly` or `default` is what survives. A second
+   union beside the first is collapsed the same way.
+6. If any branch was dropped and the merged result is a string, drop its `format` and
    `pattern` too. A branch saying the value may arrive blank makes the survivor's constraints
    a possibility rather than a promise — this is the rule that keeps a timestamp typed as a
    nullable string rather than a date.
-5. The property's own `title` and `description` override anything a variant carried, so a
-   merged property documents itself rather than describing whichever variant happened to win.
+
+## Format substitution
+
+Some descriptions spell standard formats in non-standard ways. Substitution rewrites the value
+of every `format` keyword it recognizes: `guid` becomes `uuid`, and `email` becomes `string`.
+It walks the parsed document, so spacing makes no difference. It skips values that are data
+rather than schema: `example`, `examples`, `default`, `enum`, `const` and every `x-` extension.
+A description string that happens to mention a format is left alone.
 
 ## Deduplication rules
 
@@ -60,9 +78,14 @@ rewrites references to point at it:
 
 1. Only *referenced* schemas participate. An orphan is never generated, so folding one in would
    rename a live type after a dead one.
-2. The survivor is chosen by precedence — a response wins over a request, and the primary
-   get-response over any other — because a response is the type callers actually hold.
-3. Schemas that are merely similar are never merged. Equality is structural and exact.
+2. A request and a response are never folded together, however alike they look. A schema's
+   direction is wherever it is reached from: under an operation's `requestBody`, under its
+   `responses`, or both. That includes a schema nested inside another one and a schema reached
+   through `components/requestBodies` or `components/responses`. Only schemas reached in the
+   same directions can fold.
+3. Within a group, the resource's own get-response survives if it is there. Otherwise the first
+   schema in document order survives.
+4. Schemas that are merely similar are never merged. Equality is structural and exact.
 
 References are rewritten to point at the survivor; a reference to a schema that does not exist is
 left exactly as written.
@@ -71,8 +94,7 @@ left exactly as written.
 
 The normalizer runs its stages in a fixed order:
 
-1. **Format substitution**, on the raw document text, before anything is parsed — see
-   `CONTRIBUTING.md`, "Format substitution is text replacement."
+1. **Format substitution**, so that variants spelling one format two ways agree when merged.
 2. **Union collapse**.
 3. **Deduplication**.
 
@@ -265,6 +287,8 @@ Setting `VersionMismatch` to `Warn` logs a warning instead of throwing.
 A non-2xx response throws `ApiResponseException`. When the description declares a body for that
 status, the exception is the generic `ApiResponseException<TError>` with the body read into
 `Error`; either way the raw body, status, method, URL template and requested version are kept.
+The body type is looked up the way OpenAPI defines precedence: the exact code (`404`) first,
+then its range (`4XX` or `5XX`), then `default`.
 
 ### Page walking
 
@@ -276,11 +300,16 @@ fetches the page after it. The walk starts at offset zero and:
 1. **stops after the first page when the response has no total-count header** — the page is
    returned as a normal response, and `Page<T>.HasMore` is false;
 2. otherwise keeps requesting until the rows fetched reach the total, or a page comes back empty;
-3. **throws** when a page is identical to the one before it, because that means the server is
-   ignoring the offset and the walk would never end.
+3. **throws** when the server is ignoring the offset. Otherwise every row of page one would come
+   back again and again until the total was reached.
 
-There is no request cap: a large result set is never cut short, and the repeat guard is what
-stops a runaway walk. `limit` stays on the query object and acts as the page size; the offset is
+A page identical to the one before it is only a suspicion, because real rows can repeat. The
+walk then requests the page one row later. A server that honors the offset answers that
+differently, unless every row in the run is identical. It throws only when the shifted page
+matches as well.
+
+There is no request cap, so a large result set is never cut short. The total always ends the
+walk. `limit` stays on the query object and acts as the page size; the offset is
 owned by the walk and does not appear there.
 
 ### Token exchange

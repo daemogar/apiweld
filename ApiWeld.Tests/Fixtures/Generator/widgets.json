@@ -25,7 +25,9 @@
         "requestBody": { "content": { "application/vnd.example.v2+json": { "schema": { "$ref": "#/components/schemas/new-widget" } } } },
         "responses": {
           "201": { "content": { "application/vnd.example.v2+json": { "schema": { "$ref": "#/components/schemas/widget" } } } },
-          "400": { "content": { "application/vnd.example.errors.v1+json": { "schema": { "$ref": "#/components/schemas/errors" } } } }
+          "400": { "content": { "application/vnd.example.errors.v1+json": { "schema": { "$ref": "#/components/schemas/errors" } } } },
+          "5XX": { "content": { "application/vnd.example.errors.v1+json": { "schema": { "$ref": "#/components/schemas/errors" } } } },
+          "default": { "content": { "application/vnd.example.errors.v1+json": { "schema": { "$ref": "#/components/schemas/errors" } } } }
         }
       }
     },

@@ -49,6 +49,57 @@ public class SendTests
 		Assert.Null(await Send(Transport(handler)));
 	}
 
+	sealed class Outage
+	{
+		[JsonPropertyName("trace")] public string? Trace { get; set; }
+	}
+
+	sealed class Fallback
+	{
+		[JsonPropertyName("detail")] public string? Detail { get; set; }
+	}
+
+	static readonly ApiOperation Ranged = Get with
+	{
+		ErrorRanges = new Dictionary<int, ApiErrorFactory> { [4] = ApiResponseException<Fallback>.Create, [5] = ApiResponseException<Outage>.Create },
+		DefaultError = ApiResponseException<Fallback>.Create
+	};
+
+	static Task<Widget?> SendRanged(FakeHandler handler)
+	{
+		var transport = Transport(handler);
+
+		return transport.SendAsync<Widget>(Ranged, transport.CreateRequest(Ranged, ["1"]));
+	}
+
+	[Fact]
+	public async Task Throws_the_range_error_for_a_status_with_no_exact_code()
+	{
+		var handler = new FakeHandler((_, _) => FakeHandler.Json("""{ "trace": "t1" }""", status: HttpStatusCode.ServiceUnavailable));
+
+		var exception = await Assert.ThrowsAsync<ApiResponseException<Outage>>(() => SendRanged(handler));
+
+		Assert.Equal("t1", exception.Error?.Trace);
+	}
+
+	[Fact]
+	public async Task Prefers_the_exact_code_over_its_range()
+	{
+		var handler = new FakeHandler((_, _) => FakeHandler.Json("""{ "code": "E1" }""", status: HttpStatusCode.BadRequest));
+
+		await Assert.ThrowsAsync<ApiResponseException<Problem>>(() => SendRanged(handler));
+	}
+
+	[Fact]
+	public async Task Falls_back_to_the_default_error_when_no_code_or_range_matches()
+	{
+		var handler = new FakeHandler((_, _) => FakeHandler.Json("""{ "detail": "d1" }""", status: HttpStatusCode.MovedPermanently));
+
+		var exception = await Assert.ThrowsAsync<ApiResponseException<Fallback>>(() => SendRanged(handler));
+
+		Assert.Equal("d1", exception.Error?.Detail);
+	}
+
 	[Fact]
 	public async Task Throws_the_typed_error_for_a_declared_status()
 	{

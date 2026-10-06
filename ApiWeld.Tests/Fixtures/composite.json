@@ -8,8 +8,10 @@
           "200": { "content": { "application/json": { "schema": { "$ref": "#/components/schemas/widgets_get_response" } } } }
         }
       },
-      "post": {
-        "requestBody": { "content": { "application/json": { "schema": { "$ref": "#/components/schemas/widgets_post_request" } } } }
+      "put": {
+        "responses": {
+          "200": { "content": { "application/json": { "schema": { "$ref": "#/components/schemas/widgets_put_response" } } } }
+        }
       }
     }
   },
@@ -37,7 +39,7 @@
           }
         }
       },
-      "widgets_post_request": {
+      "widgets_put_response": {
         "type": "object",
         "properties": {
           "id": { "type": "string", "format": "guid" },

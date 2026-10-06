@@ -19,12 +19,14 @@
           }
         }
       },
-      "post": {
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/widgets_get_response"
+      "put": {
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/widgets_get_response"
+                }
               }
             }
           }

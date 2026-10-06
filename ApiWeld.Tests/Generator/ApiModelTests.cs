@@ -233,6 +233,29 @@ public class ApiModelTests
 	}
 
 	[Fact]
+	public void Types_error_bodies_declared_as_ranges_and_as_default()
+	{
+		const string get = """
+			{ "responses": {
+				"200": { "content": { "application/json": { "schema": { "type": "object", "properties": { "name": { "type": "string" } } } } } },
+				"404": { "content": { "application/problem+json": { "schema": { "type": "object", "properties": { "missing": { "type": "string" } } } } } },
+				"4XX": { "content": { "application/problem+json": { "schema": { "type": "object", "properties": { "code": { "type": "string" } } } } } },
+				"5xx": { "content": { "application/problem+json": { "schema": { "type": "object", "properties": { "trace": { "type": "string" } } } } } },
+				"default": { "content": { "application/vnd.example.fallback+json": { "schema": { "type": "object", "properties": { "detail": { "type": "string" } } } } } } } }
+			""";
+
+		var (model, _) = Descriptions.Build(Plain, ("widgets.json", Descriptions.Document($$"""{ "/api/widgets": { "get": {{get}} } }""")));
+
+		var operation = Only(model, "V0", "Get", "widgets");
+
+		Assert.IsType<ModelRef>(operation.Errors[404]);
+		Assert.Equal(new[] { 4, 5 }, operation.ErrorRanges.Keys);
+		Assert.IsType<ModelRef>(operation.ErrorRanges[4]);
+		Assert.IsType<ModelRef>(operation.DefaultError);
+		Assert.Equal("application/json, application/problem+json, application/vnd.example.fallback+json", operation.Accept);
+	}
+
+	[Fact]
 	public void Prefers_the_versioned_media_type_over_plain_json()
 	{
 		const string get = """

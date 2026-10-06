@@ -175,10 +175,8 @@ public class CliTests : IDisposable
 		Assert.Contains("widgets.modified.json", error);
 	}
 
-	// Review Focus 2. Confirmed directly against OpenApiNormalizer.Normalize before writing
-	// this test: a oneOf variant using an OpenAPI 3.1 type array (`"type": ["string", "null"]`)
-	// throws InvalidOperationException from inside IsAbsent's `(string?)schema["type"]` cast,
-	// not a JsonException — this is the shape the CLI must catch and report rather than throw.
+	// A string where a number belongs throws InvalidOperationException from inside IsAbsent,
+	// not a JsonException — the shape the CLI must catch and report rather than throw.
 	[Fact]
 	public void Reports_a_description_it_cannot_normalize_without_throwing()
 	{
@@ -188,7 +186,7 @@ public class CliTests : IDisposable
 			    "schemas": {
 			      "a": {
 			        "oneOf": [
-			          { "type": ["string", "null"] },
+			          { "maxProperties": "none" },
 			          { "type": "object", "properties": { "x": { "type": "string" } } }
 			        ]
 			      }

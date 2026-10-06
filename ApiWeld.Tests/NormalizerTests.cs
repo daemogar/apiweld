@@ -46,7 +46,7 @@ public class NormalizerTests
 	}
 
 	[Fact]
-	public void Applies_format_substitution_before_parsing()
+	public void Applies_format_substitution()
 	{
 		var result = OpenApiNormalizer.Normalize(Fixture("composite.json"), "widgets");
 		var id = result["components"]!["schemas"]!["widgets_get_response"]!["properties"]!["id"]!;
@@ -57,7 +57,7 @@ public class NormalizerTests
 	[Fact]
 	public void Collapses_before_it_deduplicates()
 	{
-		// The two schemas are NOT identical as written — the response's changedOn
+		// The two schemas are NOT identical as written — the get response's changedOn
 		// carries an extra absent branch. They become identical only after the
 		// collapse, so deduplicating first would find nothing to fold and both
 		// would survive. This test fails if the order is ever reversed.
@@ -65,7 +65,7 @@ public class NormalizerTests
 		var schemas = (JsonObject)result["components"]!["schemas"]!;
 
 		Assert.True(schemas.ContainsKey("widgets_get_response"));
-		Assert.False(schemas.ContainsKey("widgets_post_request"));
+		Assert.False(schemas.ContainsKey("widgets_put_response"));
 	}
 
 	[Fact]

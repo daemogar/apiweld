@@ -7,7 +7,7 @@ using ApiWeld.Core;
 namespace ApiWeld.Cli;
 
 /// <summary>The file layer: everything that reads, compares or writes.</summary>
-public static class Normalizer
+internal static class Normalizer
 {
 	const string Usage = "usage: apiweld normalize <path-to-description.json>";
 

@@ -41,6 +41,12 @@ internal static class JsonText
 	public static string? String(JsonNode? node, string key)
 		=> (node as JsonObject)?[key] is JsonValue value && value.TryGetValue<string>(out var text) ? text : null;
 
+	/// <summary>The schema's one non-null type, from a string or an OpenAPI 3.1 type array, or null.</summary>
+	public static string? Type(JsonNode? node)
+		=> (node as JsonObject)?["type"] is JsonArray types
+			? types.OfType<JsonValue>().Select(p => p.TryGetValue<string>(out var type) ? type : null).OfType<string>().Where(p => p != "null").ToArray() is [var only] ? only : null
+			: String(node, "type");
+
 	/// <summary>Whether the boolean at <paramref name="key"/> is true.</summary>
 	public static bool Flag(JsonNode? node, string key)
 		=> (node as JsonObject)?[key] is JsonValue value && value.TryGetValue<bool>(out var flag) && flag;

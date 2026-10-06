@@ -40,8 +40,7 @@ public sealed class Page<T>
 		var offset = Offset + Items.Count;
 		var page = await fetch(offset, cancellationToken).ConfigureAwait(false);
 
-		if (page.Items.Count > 0 && page.Body == body)
-			throw PageWalker.Repeated(offset);
+		await PageWalker.GuardAsync(page, body, offset, fetch, cancellationToken).ConfigureAwait(false);
 
 		return new(page, offset, Limit, fetch);
 	}

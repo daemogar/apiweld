@@ -23,8 +23,7 @@ internal static class PageWalker
 			if (page.Items.Count == 0)
 				yield break;
 
-			if (previous is not null && page.Body == previous)
-				throw Repeated(offset);
+			await GuardAsync(page, previous, offset, fetch, cancellationToken).ConfigureAwait(false);
 
 			foreach (var item in page.Items)
 				yield return item;
@@ -41,6 +40,17 @@ internal static class PageWalker
 		}
 	}
 
-	public static InvalidOperationException Repeated(int offset)
-		=> new($"The page at offset {offset} repeats the page before it; the server appears to ignore the offset parameter.");
+	/// <summary>Throws when a page repeats the one before it and the page one row later repeats it too.</summary>
+	public static async Task GuardAsync<T>(PageFetch<T> page, string? previous, int offset,
+		Func<int, CancellationToken, Task<PageFetch<T>>> fetch, CancellationToken cancellationToken)
+	{
+		if (previous is null || page.Items.Count == 0 || page.Body != previous)
+			return;
+
+		// Rows can legitimately repeat; a server that honors the offset still answers a shifted request differently.
+		var shifted = await fetch(offset + 1, cancellationToken).ConfigureAwait(false);
+
+		if (shifted.Body == page.Body)
+			throw new InvalidOperationException($"The page at offset {offset} repeats the page before it, and so does the page at offset {offset + 1}; the server appears to ignore the offset parameter.");
+	}
 }
