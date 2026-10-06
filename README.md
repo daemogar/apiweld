@@ -60,9 +60,14 @@ rewrites references to point at it:
 
 1. Only *referenced* schemas participate. An orphan is never generated, so folding one in would
    rename a live type after a dead one.
-2. The survivor is chosen by precedence — a response wins over a request, and the primary
-   get-response over any other — because a response is the type callers actually hold.
-3. Schemas that are merely similar are never merged. Equality is structural and exact.
+2. A request and a response are never folded together, however alike they look. A schema's
+   direction is wherever it is reached from: under an operation's `requestBody`, under its
+   `responses`, or both. That includes a schema nested inside another one and a schema reached
+   through `components/requestBodies` or `components/responses`. Only schemas reached in the
+   same directions can fold.
+3. Within a group, the resource's own get-response survives if it is there. Otherwise the first
+   schema in document order survives.
+4. Schemas that are merely similar are never merged. Equality is structural and exact.
 
 References are rewritten to point at the survivor; a reference to a schema that does not exist is
 left exactly as written.

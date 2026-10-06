@@ -1,4 +1,4 @@
-﻿using System.Text.Json.Nodes;
+using System.Text.Json.Nodes;
 
 using ApiWeld.Core;
 
@@ -9,18 +9,20 @@ public class SchemaDeduplicatorTests
 	static JsonObject Deduplicate(string json, string resource = "widgets")
 		=> SchemaDeduplicator.Deduplicate((JsonObject)JsonNode.Parse(json)!, resource);
 
-	const string TwoIdenticalSchemas = """
+	static JsonObject Schemas(JsonObject document) => (JsonObject)document["components"]!["schemas"]!;
+
+	const string TwoIdenticalResponses = """
 		{
 		  "paths": {
 		    "/widgets": {
-		      "get": { "responses": { "200": { "schema": { "$ref": "#/components/schemas/widgets_get_response" } } } },
-		      "post": { "requestBody": { "schema": { "$ref": "#/components/schemas/widgets_post_request" } } }
+		      "get": { "responses": { "200": { "content": { "application/json": { "schema": { "$ref": "#/components/schemas/widgets_get_response" } } } } } },
+		      "put": { "responses": { "200": { "content": { "application/json": { "schema": { "$ref": "#/components/schemas/widgets_put_response" } } } } } }
 		    }
 		  },
 		  "components": {
 		    "schemas": {
-		      "widgets_get_response": { "type": "object", "properties": { "id": { "type": "string" } } },
-		      "widgets_post_request": { "type": "object", "properties": { "id": { "type": "string" } } }
+		      "widgets_put_response": { "type": "object", "properties": { "id": { "type": "string" } } },
+		      "widgets_get_response": { "type": "object", "properties": { "id": { "type": "string" } } }
 		    }
 		  }
 		}
@@ -29,47 +31,129 @@ public class SchemaDeduplicatorTests
 	[Fact]
 	public void Folds_identical_schemas_to_one_and_rewrites_references_to_it()
 	{
-		var result = Deduplicate(TwoIdenticalSchemas);
-		var schemas = (JsonObject)result["components"]!["schemas"]!;
+		var result = Deduplicate(TwoIdenticalResponses);
 
-		Assert.True(schemas.ContainsKey("widgets_get_response"));
-		Assert.False(schemas.ContainsKey("widgets_post_request"));
+		Assert.True(Schemas(result).ContainsKey("widgets_get_response"));
+		Assert.False(Schemas(result).ContainsKey("widgets_put_response"));
 
-		var request = (string?)result["paths"]!["/widgets"]!["post"]!["requestBody"]!["schema"]!["$ref"];
+		var put = (string?)result["paths"]!["/widgets"]!["put"]!["responses"]!["200"]!["content"]!["application/json"]!["schema"]!["$ref"];
 
-		Assert.Equal("#/components/schemas/widgets_get_response", request);
+		Assert.Equal("#/components/schemas/widgets_get_response", put);
 	}
 
 	[Fact]
 	public void Prefers_the_resources_own_get_response_as_the_survivor()
 	{
-		var result = Deduplicate(TwoIdenticalSchemas);
+		var result = Deduplicate(TwoIdenticalResponses);
 
-		Assert.True(((JsonObject)result["components"]!["schemas"]!).ContainsKey("widgets_get_response"));
+		Assert.True(Schemas(result).ContainsKey("widgets_get_response"));
 	}
 
 	[Fact]
-	public void Prefers_a_response_over_a_request_when_neither_is_the_get_response()
+	public void Keeps_the_first_schema_when_none_is_the_get_response()
+	{
+		var result = Deduplicate(TwoIdenticalResponses, resource: "other");
+
+		Assert.True(Schemas(result).ContainsKey("widgets_put_response"));
+		Assert.False(Schemas(result).ContainsKey("widgets_get_response"));
+	}
+
+	[Fact]
+	public void Never_folds_a_request_onto_an_identical_response()
 	{
 		var result = Deduplicate("""
 			{
 			  "paths": {
-			    "/a": { "get": { "schema": { "$ref": "#/components/schemas/other_response" } } },
-			    "/b": { "post": { "schema": { "$ref": "#/components/schemas/other_request" } } }
+			    "/widgets": {
+			      "get": { "responses": { "200": { "content": { "application/json": { "schema": { "$ref": "#/components/schemas/widgets_get_response" } } } } } },
+			      "post": { "requestBody": { "content": { "application/json": { "schema": { "$ref": "#/components/schemas/widgets_post_request" } } } } }
+			    }
 			  },
 			  "components": {
 			    "schemas": {
-			      "other_request": { "type": "object", "properties": { "id": { "type": "string" } } },
-			      "other_response": { "type": "object", "properties": { "id": { "type": "string" } } }
+			      "widgets_get_response": { "type": "object", "properties": { "id": { "type": "string" } } },
+			      "widgets_post_request": { "type": "object", "properties": { "id": { "type": "string" } } }
 			    }
 			  }
 			}
 			""");
 
-		var schemas = (JsonObject)result["components"]!["schemas"]!;
+		Assert.Equal(2, Schemas(result).Count);
+	}
 
-		Assert.True(schemas.ContainsKey("other_response"));
-		Assert.False(schemas.ContainsKey("other_request"));
+	[Fact]
+	public void Folds_two_identical_requests()
+	{
+		var result = Deduplicate("""
+			{
+			  "paths": {
+			    "/widgets": {
+			      "post": { "requestBody": { "content": { "application/json": { "schema": { "$ref": "#/components/schemas/widgets_post_request" } } } } },
+			      "put": { "requestBody": { "content": { "application/json": { "schema": { "$ref": "#/components/schemas/widgets_put_request" } } } } }
+			    }
+			  },
+			  "components": {
+			    "schemas": {
+			      "widgets_post_request": { "type": "object", "properties": { "id": { "type": "string" } } },
+			      "widgets_put_request": { "type": "object", "properties": { "id": { "type": "string" } } }
+			    }
+			  }
+			}
+			""");
+
+		Assert.Equal(["widgets_post_request"], Schemas(result).Select(p => p.Key));
+	}
+
+	// A nested schema takes the direction of every root that reaches it.
+	[Fact]
+	public void Never_folds_a_nested_request_schema_onto_an_identical_nested_response_schema()
+	{
+		var result = Deduplicate("""
+			{
+			  "paths": {
+			    "/widgets": {
+			      "get": { "responses": { "200": { "content": { "application/json": { "schema": { "$ref": "#/components/schemas/outer_response" } } } } } },
+			      "post": { "requestBody": { "content": { "application/json": { "schema": { "$ref": "#/components/schemas/outer_request" } } } } }
+			    }
+			  },
+			  "components": {
+			    "schemas": {
+			      "outer_response": { "type": "object", "properties": { "inner": { "$ref": "#/components/schemas/inner_a" }, "kind": { "type": "string" } } },
+			      "outer_request": { "type": "object", "properties": { "inner": { "$ref": "#/components/schemas/inner_b" } } },
+			      "inner_a": { "type": "object", "properties": { "id": { "type": "string" } } },
+			      "inner_b": { "type": "object", "properties": { "id": { "type": "string" } } }
+			    }
+			  }
+			}
+			""");
+
+		Assert.True(Schemas(result).ContainsKey("inner_a"));
+		Assert.True(Schemas(result).ContainsKey("inner_b"));
+	}
+
+	[Fact]
+	public void Reads_the_direction_through_a_shared_request_body_and_response()
+	{
+		var result = Deduplicate("""
+			{
+			  "paths": {
+			    "/widgets": {
+			      "get": { "responses": { "200": { "$ref": "#/components/responses/Widget" } } },
+			      "post": { "requestBody": { "$ref": "#/components/requestBodies/Widget" } }
+			    }
+			  },
+			  "components": {
+			    "responses": { "Widget": { "content": { "application/json": { "schema": { "$ref": "#/components/schemas/a" } } } } },
+			    "requestBodies": { "Widget": { "content": { "application/json": { "schema": { "$ref": "#/components/schemas/b" } } } } },
+			    "schemas": {
+			      "a": { "type": "object", "properties": { "id": { "type": "string" } } },
+			      "b": { "type": "object", "properties": { "id": { "type": "string" } } }
+			    }
+			  }
+			}
+			""");
+
+		Assert.Equal(2, Schemas(result).Count);
 	}
 
 	// The rule that stops a live type being renamed after a dead one.
@@ -78,7 +162,7 @@ public class SchemaDeduplicatorTests
 	{
 		var result = Deduplicate("""
 			{
-			  "paths": { "/a": { "get": { "schema": { "$ref": "#/components/schemas/live_response" } } } },
+			  "paths": { "/a": { "get": { "responses": { "200": { "content": { "application/json": { "schema": { "$ref": "#/components/schemas/live_response" } } } } } } } },
 			  "components": {
 			    "schemas": {
 			      "live_response": { "type": "object", "properties": { "id": { "type": "string" } } },
@@ -88,10 +172,8 @@ public class SchemaDeduplicatorTests
 			}
 			""");
 
-		var schemas = (JsonObject)result["components"]!["schemas"]!;
-
-		Assert.True(schemas.ContainsKey("live_response"));
-		Assert.True(schemas.ContainsKey("orphan"));
+		Assert.True(Schemas(result).ContainsKey("live_response"));
+		Assert.True(Schemas(result).ContainsKey("orphan"));
 	}
 
 	[Fact]
@@ -100,8 +182,8 @@ public class SchemaDeduplicatorTests
 		var result = Deduplicate("""
 			{
 			  "paths": {
-			    "/a": { "get": { "schema": { "$ref": "#/components/schemas/a_response" } } },
-			    "/b": { "get": { "schema": { "$ref": "#/components/schemas/b_response" } } }
+			    "/a": { "get": { "responses": { "200": { "content": { "application/json": { "schema": { "$ref": "#/components/schemas/a_response" } } } } } } },
+			    "/b": { "get": { "responses": { "200": { "content": { "application/json": { "schema": { "$ref": "#/components/schemas/b_response" } } } } } } }
 			  },
 			  "components": {
 			    "schemas": {
@@ -112,9 +194,7 @@ public class SchemaDeduplicatorTests
 			}
 			""");
 
-		var schemas = (JsonObject)result["components"]!["schemas"]!;
-
-		Assert.Equal(2, schemas.Count);
+		Assert.Equal(2, Schemas(result).Count);
 	}
 
 	[Fact]
@@ -122,7 +202,7 @@ public class SchemaDeduplicatorTests
 	{
 		var result = Deduplicate("""
 			{
-			  "paths": { "/a": { "get": { "schema": { "$ref": "#/components/schemas/outer_response" } } } },
+			  "paths": { "/a": { "get": { "responses": { "200": { "content": { "application/json": { "schema": { "$ref": "#/components/schemas/outer_response" } } } } } } } },
 			  "components": {
 			    "schemas": {
 			      "outer_response": { "type": "object", "properties": { "inner": { "$ref": "#/components/schemas/inner_response" } } },
@@ -133,11 +213,9 @@ public class SchemaDeduplicatorTests
 			}
 			""");
 
-		var schemas = (JsonObject)result["components"]!["schemas"]!;
-
 		// inner_request is unreferenced, so it survives untouched rather than folding.
-		Assert.True(schemas.ContainsKey("inner_response"));
-		Assert.True(schemas.ContainsKey("inner_request"));
+		Assert.True(Schemas(result).ContainsKey("inner_response"));
+		Assert.True(Schemas(result).ContainsKey("inner_request"));
 	}
 
 	// Review Focus 4.
@@ -156,12 +234,12 @@ public class SchemaDeduplicatorTests
 	{
 		var result = Deduplicate("""
 			{
-			  "paths": { "/a": { "get": { "schema": { "$ref": "#/components/schemas/missing" } } } },
+			  "paths": { "/a": { "get": { "responses": { "200": { "content": { "application/json": { "schema": { "$ref": "#/components/schemas/missing" } } } } } } } },
 			  "components": { "schemas": { "present_response": { "type": "object", "properties": {} } } }
 			}
 			""");
 
-		var reference = (string?)result["paths"]!["/a"]!["get"]!["schema"]!["$ref"];
+		var reference = (string?)result["paths"]!["/a"]!["get"]!["responses"]!["200"]!["content"]!["application/json"]!["schema"]!["$ref"];
 
 		Assert.Equal("#/components/schemas/missing", reference);
 	}
