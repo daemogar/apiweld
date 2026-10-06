@@ -283,11 +283,16 @@ fetches the page after it. The walk starts at offset zero and:
 1. **stops after the first page when the response has no total-count header** — the page is
    returned as a normal response, and `Page<T>.HasMore` is false;
 2. otherwise keeps requesting until the rows fetched reach the total, or a page comes back empty;
-3. **throws** when a page is identical to the one before it, because that means the server is
-   ignoring the offset and the walk would never end.
+3. **throws** when the server is ignoring the offset. Otherwise every row of page one would come
+   back again and again until the total was reached.
 
-There is no request cap: a large result set is never cut short, and the repeat guard is what
-stops a runaway walk. `limit` stays on the query object and acts as the page size; the offset is
+A page identical to the one before it is only a suspicion, because real rows can repeat. The
+walk then requests the page one row later. A server that honors the offset answers that
+differently, unless every row in the run is identical. It throws only when the shifted page
+matches as well.
+
+There is no request cap, so a large result set is never cut short. The total always ends the
+walk. `limit` stays on the query object and acts as the page size; the offset is
 owned by the walk and does not appear there.
 
 ### Token exchange

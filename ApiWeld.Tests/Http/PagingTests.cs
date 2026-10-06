@@ -23,12 +23,12 @@ public class PagingTests
 	static readonly ApiOperation List = new(HttpMethod.Get, "api/rows") { Paging = new("offset", "limit", "X-Total-Count") };
 
 	/// <summary>Serves <paramref name="rows"/> rows, <paramref name="pageSize"/> at a time unless a limit is sent.</summary>
-	static FakeHandler Server(int rows, int pageSize = 2, int? total = null, bool ignoreOffset = false) => new((request, _) =>
+	static FakeHandler Server(int rows, int pageSize = 2, int? total = null, bool ignoreOffset = false, Func<int, int>? idOf = null) => new((request, _) =>
 	{
 		var query = HttpUtility.ParseQueryString(request.RequestUri!.Query);
 		var offset = ignoreOffset ? 0 : int.Parse(query["offset"] ?? "0");
 		var limit = int.TryParse(query["limit"], out var sent) ? sent : pageSize;
-		var ids = Enumerable.Range(offset, Math.Max(0, Math.Min(limit, rows - offset))).Select(id => new { id });
+		var ids = Enumerable.Range(offset, Math.Max(0, Math.Min(limit, rows - offset))).Select(row => new { id = idOf?.Invoke(row) ?? row });
 		var response = FakeHandler.Json(JsonSerializer.Serialize(ids));
 
 		if (total is { } count)
@@ -81,6 +81,41 @@ public class PagingTests
 		var handler = Server(rows: 10, total: 10, ignoreOffset: true);
 
 		var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => Transport(handler).GetAllAsync<Row>(List, [], null, TestContext.Current.CancellationToken));
+
+		Assert.Contains("offset 2", exception.Message);
+	}
+
+	// Rows 0-3 are identical, so the pages at offsets 0 and 2 are too; the server honors the offset.
+	[Fact]
+	public async Task Walks_on_past_two_pages_that_really_are_identical()
+	{
+		var handler = Server(rows: 5, total: 5, idOf: row => row < 4 ? 7 : 8);
+
+		var rows = await Transport(handler).GetAllAsync<Row>(List, [], null, TestContext.Current.CancellationToken);
+
+		Assert.Equal(new[] { 7, 7, 7, 7, 8 }, rows.Select(r => r.Id!.Value));
+	}
+
+	[Fact]
+	public async Task Fetches_the_next_page_by_hand_past_an_identical_one()
+	{
+		var handler = Server(rows: 5, total: 5, idOf: row => row < 4 ? 7 : 8);
+
+		var page = await Transport(handler).GetPageAsync<Row>(List, [], null, offset: 0, limit: 2, cancellationToken: TestContext.Current.CancellationToken);
+		var next = await page.NextAsync(TestContext.Current.CancellationToken);
+
+		Assert.Equal(new[] { 7, 7 }, next!.Items.Select(r => r.Id!.Value));
+		Assert.Equal(2, next.Offset);
+	}
+
+	[Fact]
+	public async Task Throws_from_the_next_page_by_hand_when_the_server_ignores_the_offset()
+	{
+		var handler = Server(rows: 10, total: 10, ignoreOffset: true);
+
+		var page = await Transport(handler).GetPageAsync<Row>(List, [], null, offset: 0, limit: 2, cancellationToken: TestContext.Current.CancellationToken);
+
+		var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => page.NextAsync(TestContext.Current.CancellationToken));
 
 		Assert.Contains("offset 2", exception.Message);
 	}
