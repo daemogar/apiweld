@@ -1,4 +1,8 @@
 ﻿using ApiWeld.Generator;
+using ApiWeld.Generator.Emit;
+
+using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.CSharp.Syntax;
 
 namespace ApiWeld.Tests.Generator;
 
@@ -110,6 +114,32 @@ public class EmissionTests
 		Assert.False(result.Succeeded);
 		Assert.Contains(result.Diagnostics, d => d.Severity == Severity.Error
 			&& d.Message == $"{name}: a model would share its name with {what}; add a \"names\" entry.");
+	}
+
+	[Fact]
+	public void Lists_every_outside_type_the_generated_code_names()
+	{
+		var generated = ClientGenerator.Generate(FixtureManifest, Fixtures()).Files;
+		var compilation = Compiler.Create(generated.Select(file => (file.Path, file.Content)).Append(("Consumer.cs", Consumer)));
+
+		var named = compilation.SyntaxTrees
+			.Where(tree => tree.FilePath != "Consumer.cs")
+			.SelectMany(tree =>
+			{
+				var model = compilation.GetSemanticModel(tree);
+
+				return tree.GetRoot().DescendantNodes().OfType<IdentifierNameSyntax>()
+					.Where(name => !name.IsVar)
+					.Where(name => model.GetSymbolInfo(name).Symbol is INamedTypeSymbol { Arity: 0 } type
+						&& !SymbolEqualityComparer.Default.Equals(type.ContainingAssembly, compilation.Assembly))
+					.Select(name => name.Identifier.ValueText);
+			})
+			.Distinct()
+			.Order(StringComparer.Ordinal)
+			.ToList();
+
+		Assert.Contains("ApiTransport", named);
+		Assert.Empty(named.Except(ReservedNames.Used));
 	}
 
 	[Fact]

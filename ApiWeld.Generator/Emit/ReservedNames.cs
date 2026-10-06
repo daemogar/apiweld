@@ -6,7 +6,7 @@ namespace ApiWeld.Generator.Emit;
 internal static class ReservedNames
 {
 	/// <summary>Simple names, at arity zero, that generated code uses from the runtime and the base library.</summary>
-	static readonly string[] Used =
+	internal static readonly IReadOnlyList<string> Used =
 	[
 		"ApiClient", "ApiErrorFactory", "ApiOperation", "ApiQuery", "ApiRequestParameters", "ApiResponseException",
 		"ApiTransport", "IApiQuery", "CancellationToken", "DateOnly", "DateTimeOffset", "Guid", "HttpMethod",
