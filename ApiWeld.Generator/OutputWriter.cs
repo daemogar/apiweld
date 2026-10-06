@@ -17,7 +17,7 @@ public static class OutputWriter
 	/// <summary>Writes <paramref name="files"/> under <paramref name="directory"/>; returns errors and writes nothing when a target was not generated.</summary>
 	public static IReadOnlyList<Diagnostic> Write(string directory, IReadOnlyList<GeneratedFile> files)
 	{
-		var root = Path.TrimEndingDirectorySeparator(Path.GetFullPath(directory)) + Path.DirectorySeparatorChar;
+		var root = RootOf(directory);
 		var targets = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 		var errors = new List<Diagnostic>();
 
@@ -25,37 +25,98 @@ public static class OutputWriter
 		{
 			var target = Path.GetFullPath(Path.Combine(root, file.Path));
 
-			if (!target.StartsWith(root, StringComparison.OrdinalIgnoreCase))
+			if (!IsInside(root, target))
 				errors.Add(new(Severity.Error, $"{file.Path}: lies outside the output folder."));
 			else if (!targets.TryAdd(target, file.Content))
 				errors.Add(new(Severity.Error, $"{file.Path}: names the same file as another output path, differing only in case."));
 		}
 
-		errors.AddRange(targets.Keys
-			.Where(File.Exists)
-			.Where(target => !IsGenerated(target))
-			.Order(StringComparer.Ordinal)
-			.Select(target => new Diagnostic(Severity.Error, $"{target}: exists and was not generated; move it out of the output folder.")));
+		foreach (var target in targets.Keys.Where(File.Exists).Order(StringComparer.Ordinal))
+		{
+			var generated = false;
+
+			if (Attempt(target, "read", () => generated = IsGenerated(target), errors) && !generated)
+				errors.Add(new(Severity.Error, $"{target}: exists and was not generated; move it out of the output folder."));
+		}
 
 		if (errors.Count > 0)
 			return errors;
 
 		foreach (var (target, content) in targets)
-		{
-			Directory.CreateDirectory(Path.GetDirectoryName(target)!);
-			var bytes = Utf8WithBom.GetPreamble().Concat(Utf8WithBom.GetBytes(content)).ToArray();
+			Attempt(target, "write", () => WriteIfChanged(target, content), errors);
 
-			if (!File.Exists(target) || !File.ReadAllBytes(target).AsSpan().SequenceEqual(bytes))
-				File.WriteAllBytes(target, bytes);
+		if (errors.Count > 0 || !Directory.Exists(directory))
+			return errors;
+
+		List<string> stales = [];
+
+		if (!Attempt(directory, "list", () => stales = [.. Directory.EnumerateFiles(directory, "*.g.cs", SearchOption.AllDirectories)
+			.Select(Path.GetFullPath)
+			.Where(file => !targets.ContainsKey(file))
+			.Order(StringComparer.Ordinal)], errors))
+			return errors;
+
+		foreach (var stale in stales)
+		{
+			var generated = false;
+
+			if (Attempt(stale, "read", () => generated = IsGenerated(stale), errors) && generated
+				&& Attempt(stale, "delete", () => File.Delete(stale), errors))
+				Attempt(stale, "remove its empty folder", () => RemoveEmptyFolders(Path.GetDirectoryName(stale)!, root), errors);
 		}
 
-		if (Directory.Exists(directory))
-			foreach (var stale in Directory.EnumerateFiles(directory, "*.g.cs", SearchOption.AllDirectories)
-				.Where(file => !targets.ContainsKey(Path.GetFullPath(file)) && IsGenerated(file))
-				.ToList())
-				File.Delete(stale);
-
 		return errors;
+	}
+
+	/// <summary>The output folder as a prefix ending in exactly one separator, a drive root included.</summary>
+	internal static string RootOf(string directory)
+	{
+		var full = Path.GetFullPath(directory);
+
+		return Path.EndsInDirectorySeparator(full) ? full : full + Path.DirectorySeparatorChar;
+	}
+
+	/// <summary>Whether <paramref name="path"/> lies beneath <paramref name="root"/>.</summary>
+	internal static bool IsInside(string root, string path) => path.StartsWith(root, StringComparison.OrdinalIgnoreCase);
+
+	/// <summary>Runs <paramref name="work"/>, turning a file-system failure into an error naming <paramref name="path"/>.</summary>
+	static bool Attempt(string path, string action, Action work, List<Diagnostic> errors)
+	{
+		try
+		{
+			work();
+
+			return true;
+		}
+		catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+		{
+			errors.Add(new(Severity.Error, $"{path}: could not {action} — {exception.Message}"));
+
+			return false;
+		}
+	}
+
+	static void WriteIfChanged(string target, string content)
+	{
+		Directory.CreateDirectory(Path.GetDirectoryName(target)!);
+		var bytes = Utf8WithBom.GetPreamble().Concat(Utf8WithBom.GetBytes(content)).ToArray();
+
+		if (!File.Exists(target) || !File.ReadAllBytes(target).AsSpan().SequenceEqual(bytes))
+			File.WriteAllBytes(target, bytes);
+	}
+
+	/// <summary>Whether <paramref name="folder"/> lies beneath the output folder and so may be removed once empty.</summary>
+	internal static bool MayRemove(string root, string folder)
+		=> IsInside(root, folder) && !string.Equals(RootOf(folder), root, StringComparison.OrdinalIgnoreCase);
+
+	/// <summary>Removes <paramref name="folder"/> and each parent left empty, stopping at the output folder itself.</summary>
+	static void RemoveEmptyFolders(string folder, string root)
+	{
+		while (MayRemove(root, folder) && !Directory.EnumerateFileSystemEntries(folder).Any())
+		{
+			Directory.Delete(folder);
+			folder = Path.GetDirectoryName(folder)!;
+		}
 	}
 
 	static bool IsGenerated(string path)

@@ -99,7 +99,8 @@ generated code calls the `ApiWeld.Http` runtime (see "The runtime").
   "output": "Generated",
   "basePaths": ["/api", "/query"],
   "paging": { "offset": "offset", "limit": "limit", "totalHeader": "X-Total-Count" },
-  "names": { "errors_1_0_0": "Errors" }
+  "names": { "errors_1_0_0": "Errors" },
+  "singulars": { "octopi": "octopus" }
 }
 ```
 
@@ -112,6 +113,12 @@ generated code calls the `ApiWeld.Http` runtime (see "The runtime").
 - `basePaths` — leading path segments left out of navigation; see "Paths and versions".
 - `paging` — the names that make an operation paged; see "Page walking". Defaults as shown.
 - `names` — overrides for derived names; see "Names".
+- `singulars` — plural words the built-in rules get wrong, each mapped to its singular, one word
+  to one word; see "Names".
+
+Unknown keys are refused — at the top level and inside `paging` — so a misspelled setting is
+reported instead of ignored; keys starting with `$`, such as `$schema`, are allowed. `client`,
+each part of `namespace`, and every `names` value must be a C# identifier that is not a keyword.
 
 The manifest holds no version settings. Versions come from the descriptions and are chosen in
 code, at every call site.
@@ -125,7 +132,8 @@ description calls it: `/widgets/{id}` and `/widgets/{widgetId}/parts` share one 
 to `Api.Widgets[id].Parts`. The indexer takes a `Guid` when every description declares a UUID
 there, and a `string` otherwise (with a warning when they disagree). The same verb at the same
 version on one merged path is an error, and so is a segment that mixes text and parameters, such
-as `{id}.json` or `{from}-{to}`: every parameter must fill a whole segment.
+as `{id}.json` or `{from}-{to}`: every parameter must fill a whole segment. A path that carries a
+query string or fragment, such as `/widgets?kind=a`, is an error too.
 
 An operation's version is read from the media type of its success response — never from the
 description's `info.version`, which is only reported when it disagrees. When a response
@@ -135,6 +143,11 @@ declares several media types, the most specific versioned JSON type wins over pl
 type is `V0`; one with no response body at all takes the single version the rest of its
 description uses, if there is exactly one. A request body and the error bodies keep their own
 media types inside their operation, and never create members of their own.
+
+A success declared as the range `2XX` is read like a numbered one; when both are present, the
+numbered code wins. `default` is never read as the success, because it normally describes
+errors: an operation whose only success is `default` is generated without a response body, with
+a warning.
 
 Several files for one resource at different versions generate side-by-side members. Removing a
 file removes its member, so every call site that named it stops compiling — which is how a
@@ -150,10 +163,13 @@ A generated type is named `{Root}{Version}{Path}{Suffix}`:
 - **Root** — the description's file name in PascalCase with its last word made singular:
   `academic-disciplines` becomes `AcademicDiscipline`. (`-ies` becomes `-y`; `-sses`, `-xes`,
   `-ches`, `-shes` and `-uses` drop `-es`; otherwise a trailing `-s` is dropped unless the word
-  ends `-ss`, `-us` or `-is`.)
+  ends `-ss`, `-us` or `-is`. Common irregular plurals are known — `people`, `series`,
+  `analyses`, `indices`, `warehouses` and others.)
 - **Version** — the version member, such as `V12_6`.
 - **Path** — the property path from the body, with array items singular: `addresses[].place`
-  becomes `AddressPlace`.
+  becomes `AddressPlace`. The same singular rules apply, and the manifest's `singulars` map comes
+  first, so a word the rules get wrong can be fixed even for an array that has no schema name to
+  override.
 - **Suffix** — always `Response` or `Request`, so a name does not change when a description
   starts or stops sharing a shape between the two. Error bodies have no suffix; they are named
   after their schema and the error media type's version, such as `ErrorsV2`.
@@ -162,7 +178,10 @@ Types merge when their shape and direction are identical, across files as well a
 and a merged type takes its shortest candidate name, ties broken in ordinal order. When
 different shapes want one name, the one a GET returns keeps it and the others gain their verb
 after the version (`ThingV1PostResponse`), with a warning; a clash that survives that is an
-error naming the fix.
+error naming the fix. A model may not take a name the generated navigation already has —
+`{Path}Node`, `{Path}{Version}Operations`, `{Path}{Version}{Verb}Query`, `{Client}Api` — nor the
+name of a type the generated code uses, such as `ApiTransport` or `JsonElement`; that is an error
+asking for a `names` entry.
 
 `names` in the manifest overrides a base name. A description's file stem replaces its Root; a
 component schema's name replaces the base of the type built from it, and the types nested under
@@ -189,7 +208,10 @@ input — so regenerating without changes leaves nothing to commit, and a file w
 not changed is not rewritten at all. Generated files left over from an earlier run are deleted,
 but only files starting with both of those lines: the tool refuses to overwrite any other file,
 including one another generator wrote, and never deletes one. It also refuses, writing nothing,
-any output path that lies outside `output` or that differs from another only in case.
+any output path that lies outside `output` or that differs from another only in case. A folder
+that deleting stale files leaves empty is removed as well (the output folder itself never is). A
+file the tool cannot read, write or delete — locked by another program, or read-only — is
+reported as an error naming it instead of stopping the run with an exception.
 
 The generated half of the client derives from `ApiClient` and declares no constructor; the
 consumer's own half declares one (see "Registration"). Hand-written operations go in further
@@ -220,6 +242,10 @@ silently drops the value. The runtime's serializer options coerce instead:
 - A JSON number or boolean read into a string yields its raw JSON text — `2026`, `1.50`, `true`.
 - JSON text read into a number or boolean is parsed with the invariant culture; text that does
   not parse becomes `null`.
+- A JSON number read into an integer is accepted when its value is whole, whatever its form —
+  `3.0` and `1e2` read as `3` and `100`. A number that does not fit the property (a fraction or
+  an out-of-range value for an integer, any number for a boolean) becomes `null` like unparseable
+  text, so one odd value never fails a whole response.
 - Property names stay case-sensitive, so a field the description misnames is not quietly matched
   to the wrong property; it lands in the model's `AdditionalData`, where it can be seen.
 
@@ -269,7 +295,11 @@ it as `Authorization: Bearer <token>`.
 The token is cached. When it is a JWT, it is replaced `RefreshMargin` before its `exp` claim;
 otherwise it is kept for `FallbackLifetime`. A 401 response invalidates the cached token and
 retries the request exactly once with a fresh one, replaying the same body. A failed exchange
-throws `TokenExchangeException` naming the endpoint and status — never the key.
+throws `TokenExchangeException` naming the endpoint and status — never the key —
+and so does an exchange that cannot be completed at all (the endpoint unreachable, or the request
+timing out), with the underlying failure as its inner exception; cancelling the call itself is
+not wrapped. Concurrent requests share one exchange: while a token is being fetched, every other
+request waits for it instead of starting its own.
 
 ### Registration
 
@@ -300,11 +330,18 @@ services.AddApiWeldClient<ExampleClient>(configuration.GetSection("ExampleApi"))
 }
 ```
 
-`BaseUrl` is required; a trailing slash is added when missing so operation paths resolve beneath
-it. `Timeout` defaults to 100 seconds, `PooledConnectionLifetime` to two minutes and
-`VersionMismatch` to `Throw`. `TokenExchange` is off unless the section is present, and then
-needs `Endpoint` and `ApiKey`; see "Token exchange" for the rest of its settings. Options are
-validated on first use (and at start-up when the host runs start-up validation).
+`BaseUrl` is required and may not carry a query or fragment; a trailing slash is added when
+missing so operation paths resolve beneath it. `Timeout` defaults to 100 seconds,
+`PooledConnectionLifetime` to two minutes and `VersionMismatch` to `Throw`. `TokenExchange` is off
+unless it is configured — in the section, or in code with
+`services.Configure<ApiClientOptions<ExampleClient>>(…)` — and then needs `Endpoint` and `ApiKey`;
+see "Token exchange" for the rest of its settings. Whether a client exchanges tokens is decided
+once, when its HTTP pipeline is first built. Options are validated on first use (and at start-up
+when the host runs start-up validation).
+
+`AddApiWeldClient` registers a client type once. A second call for the same type — easy to make
+by accident through shared setup code or a test fixture — is ignored, section included, and
+returns a builder for the same client, so handlers chained on it still apply.
 
 ## Packages
 

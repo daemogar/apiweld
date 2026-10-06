@@ -653,10 +653,14 @@ public sealed class WidgetsV2GetQuery : IApiQuery
 	/// <summary>A JSON filter.</summary>
 	public string? Criteria { get; set; }
 
+	/// <summary>Correlates the request.</summary>
+	public string? XRequestId { get; set; }
+
 	void IApiQuery.Apply(ApiRequestParameters parameters)
 	{
 		parameters.Query("limit", Limit);
 		parameters.Query("criteria", Criteria);
+		parameters.Header("X-Request-Id", XRequestId);
 	}
 }
 

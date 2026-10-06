@@ -59,7 +59,7 @@ internal sealed class ApiModelBuilder
 			return;
 		}
 
-		var resource = manifest.Names.TryGetValue(stem, out var renamed) ? renamed : Words.SingularPascal(stem);
+		var resource = manifest.Names.TryGetValue(stem, out var renamed) ? renamed : Words.SingularPascal(stem, manifest.Singulars);
 
 		var operations = (
 			from path in paths.OrderBy(path => path.Key, StringComparer.Ordinal)
@@ -99,13 +99,16 @@ internal sealed class ApiModelBuilder
 		var success = Success(operation, document);
 		var picked = MediaTypes.Pick(success?["content"]);
 
+		if (success is null && HasDefaultBody(operation, document))
+			diagnostics.Warn($"{file}: {label} declares its success response only as \"default\"; it is generated without a response body.");
+
 		if (picked is null && success?["content"] is JsonObject { Count: > 0 })
 			diagnostics.Warn($"{file}: {label} declares no JSON response; it is generated without a response body.");
 
 		var mediaType = picked?.MediaType ?? inherited?.MediaType;
 		var version = MediaTypeVersion.Read(mediaType);
 		var member = MediaTypeVersion.MemberName(version);
-		var context = new NameContext(resource, member, verb, [], "Response", Direction.Response, method == "get", file);
+		var context = new NameContext(resource, member, verb, [], "Response", Direction.Response, method == "get", file) { Singulars = manifest.Singulars };
 		var response = picked?.Schema is { } schema ? shapes.Build(schema, document, context) : null;
 
 		var body = MediaTypes.Pick(References.Resolve(operation["requestBody"], document).Node?["content"]);
@@ -155,12 +158,22 @@ internal sealed class ApiModelBuilder
 		list.Add(model);
 	}
 
+	/// <summary>The success response: the lowest numbered 2xx, or else a <c>2XX</c> range.</summary>
 	static JsonObject? Success(JsonObject operation, JsonObject document)
 		=> (operation["responses"] as JsonObject)?
-			.Where(response => int.TryParse(response.Key, out var code) && code is >= 200 and < 300)
-			.OrderBy(response => response.Key, StringComparer.Ordinal)
+			.Where(response => IsSuccess(response.Key))
+			.OrderBy(response => IsRange(response.Key))
+			.ThenBy(response => response.Key, StringComparer.Ordinal)
 			.Select(response => References.Resolve(response.Value, document).Node)
 			.FirstOrDefault(response => response is not null);
+
+	static bool IsRange(string status) => status.Equals("2XX", StringComparison.OrdinalIgnoreCase);
+
+	static bool IsSuccess(string status) => IsRange(status) || (int.TryParse(status, out var code) && code is >= 200 and < 300);
+
+	/// <summary>Whether a <c>default</c> response has content; it normally describes errors, so it is never read as the success.</summary>
+	static bool HasDefaultBody(JsonObject operation, JsonObject document)
+		=> References.Resolve((operation["responses"] as JsonObject)?["default"], document).Node?["content"] is JsonObject { Count: > 0 };
 
 	(SortedDictionary<int, TypeRef> Types, List<string> MediaTypes) Errors(string file, JsonObject document, string resource, JsonObject operation)
 	{
@@ -183,7 +196,7 @@ internal sealed class ApiModelBuilder
 
 			var errorVersion = MediaTypeVersion.Read(error.MediaType);
 			var context = new NameContext(resource + "Error", errorVersion is null ? "" : MediaTypeVersion.MemberName(errorVersion),
-				"", [], "", Direction.Error, false, file, ErrorRoot: true);
+				"", [], "", Direction.Error, false, file, ErrorRoot: true) { Singulars = manifest.Singulars };
 
 			types[code] = shapes.Build(error.Schema, document, context);
 		}
@@ -257,6 +270,12 @@ internal sealed class ApiModelBuilder
 
 	PathNode? Place(string file, string label, string path, Dictionary<string, string> pathTypes)
 	{
+		if (path.IndexOfAny(['?', '#']) >= 0)
+		{
+			diagnostics.Error($"{file}: {label} carries a query or fragment; that is not supported.");
+			return null;
+		}
+
 		var segments = path.Split('/', StringSplitOptions.RemoveEmptyEntries);
 		var skip = manifest.BasePaths
 			.Select(basePath => basePath.Split('/', StringSplitOptions.RemoveEmptyEntries))

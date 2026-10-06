@@ -45,6 +45,29 @@ public class WordsTests
 	}
 
 	[Theory]
+	[InlineData("people", "Person")]
+	[InlineData("movies", "Movie")]
+	[InlineData("series", "Series")]
+	[InlineData("analyses", "Analysis")]
+	[InlineData("quizzes", "Quiz")]
+	[InlineData("warehouses", "Warehouse")]
+	[InlineData("academic-indices", "AcademicIndex")]
+	[InlineData("employee-spouses", "EmployeeSpouse")]
+	public void Knows_common_irregular_plurals(string text, string expected)
+	{
+		Assert.Equal(expected, Words.SingularPascal(text));
+	}
+
+	[Fact]
+	public void Uses_the_manifest_singulars_before_the_built_in_ones()
+	{
+		var singulars = new Dictionary<string, string> { ["octopi"] = "octopus", ["people"] = "member" };
+
+		Assert.Equal("SeaOctopus", Words.SingularPascal("sea-octopi", singulars));
+		Assert.Equal("Member", Words.SingularPascal("people", singulars));
+	}
+
+	[Theory]
 	[InlineData("2fa", "_2fa")]
 	[InlineData("class", "@class")]
 	[InlineData("", "Value")]

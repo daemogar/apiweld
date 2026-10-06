@@ -33,6 +33,11 @@ public static class GenerateCommand
 			error.WriteLine($"{Path.GetFileName(manifestPath)}: {exception.Message}");
 			return 1;
 		}
+		catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+		{
+			error.WriteLine($"{Path.GetFileName(manifestPath)}: could not read — {exception.Message}");
+			return 1;
+		}
 
 		var baseDirectory = Path.GetDirectoryName(Path.GetFullPath(manifestPath))!;
 		var found = new List<Diagnostic>();

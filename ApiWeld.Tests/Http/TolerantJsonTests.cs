@@ -62,6 +62,39 @@ public class TolerantJsonTests
 		Assert.Null(sample.Flag);
 	}
 
+	[Theory]
+	[InlineData("""{ "count": 3.0, "big": 3.0 }""")]
+	[InlineData("""{ "count": 3e0, "big": 3e0 }""")]
+	[InlineData("""{ "count": "3.0", "big": "3.0" }""")]
+	public void Reads_a_whole_number_in_any_form_into_an_integer(string json)
+	{
+		var sample = Read(json);
+
+		Assert.Equal(3, sample.Count);
+		Assert.Equal(3L, sample.Big);
+	}
+
+	[Theory]
+	[InlineData("""{ "count": 3.00000000000000000000000000001 }""", null)]
+	[InlineData("""{ "count": "3.00000000000000000000000000001" }""", null)]
+	[InlineData("""{ "count": 1e-400 }""", null)]
+	[InlineData("""{ "count": 300e-2 }""", 3)]
+	public void Reads_a_number_as_whole_only_when_every_digit_after_the_point_is_zero(string json, int? expected)
+	{
+		Assert.Equal(expected, Read(json).Count);
+	}
+
+	[Fact]
+	public void Turns_a_number_that_does_not_fit_into_null()
+	{
+		var sample = Read("""{ "count": 3.5, "big": 1e20, "flag": 1, "text": "kept" }""");
+
+		Assert.Null(sample.Count);
+		Assert.Null(sample.Big);
+		Assert.Null(sample.Flag);
+		Assert.Equal("kept", sample.Text);
+	}
+
 	[Fact]
 	public void Still_reads_values_of_the_declared_kind()
 	{

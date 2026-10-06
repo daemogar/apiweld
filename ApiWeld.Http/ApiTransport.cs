@@ -40,20 +40,35 @@ public sealed partial class ApiTransport
 		var url = BuildUrl(operation.Template, path, parameters.QueryValues);
 		var request = new HttpRequestMessage(operation.Method, new Uri(url, UriKind.Relative));
 
-		if (operation.Accept is { } accept)
-			request.Headers.TryAddWithoutValidation("Accept", accept);
-
-		foreach (var (name, value) in parameters.Headers)
-			request.Headers.TryAddWithoutValidation(name, value);
-
-		if (body is not null)
+		try
 		{
-			var content = new ByteArrayContent(JsonSerializer.SerializeToUtf8Bytes(body, body.GetType(), Json));
-			content.Headers.TryAddWithoutValidation("Content-Type", operation.ContentType ?? "application/json");
-			request.Content = content;
-		}
+			if (body is not null)
+				request.Content = new ByteArrayContent(JsonSerializer.SerializeToUtf8Bytes(body, body.GetType(), Json));
 
-		return request;
+			if (operation.Accept is { } accept)
+				AddHeader(request, "Accept", accept);
+
+			if (body is not null)
+				AddHeader(request, "Content-Type", operation.ContentType ?? "application/json");
+
+			foreach (var (name, value) in parameters.Headers)
+				AddHeader(request, name, value);
+
+			return request;
+		}
+		catch
+		{
+			request.Dispose();
+			throw;
+		}
+	}
+
+	/// <summary>Adds a header to the request, or to its body when it is a content header; refuses one neither can carry rather than dropping it.</summary>
+	static void AddHeader(HttpRequestMessage request, string name, string value)
+	{
+		if (value.AsSpan().IndexOfAny('\r', '\n') >= 0
+			|| !(request.Headers.TryAddWithoutValidation(name, value) || request.Content?.Headers.TryAddWithoutValidation(name, value) == true))
+			throw new ArgumentException($"The header \"{name}\" cannot be sent on a request.");
 	}
 
 	[GeneratedRegex(@"\{[^}]+\}")]
@@ -61,6 +76,9 @@ public sealed partial class ApiTransport
 
 	static string BuildUrl(string template, IReadOnlyList<string> path, IReadOnlyList<KeyValuePair<string, string>> query)
 	{
+		if (template.IndexOfAny(['?', '#']) >= 0)
+			throw new ArgumentException($"The template {template} carries a query or fragment; query values belong on the query object.");
+
 		var index = 0;
 		var url = Placeholder().Replace(template.TrimStart('/'), _ => index < path.Count
 			? Segment(template, path[index++])

@@ -38,8 +38,20 @@ public sealed partial record Manifest
 	/// <summary>Base-name overrides, keyed by description file stem or component schema name.</summary>
 	public IReadOnlyDictionary<string, string> Names { get; init; } = new Dictionary<string, string>();
 
+	/// <summary>Singulars for plurals the built-in rules get wrong, keyed by the lowercase plural.</summary>
+	public IReadOnlyDictionary<string, string> Singulars { get; init; } = new Dictionary<string, string>();
+
 	[GeneratedRegex("^[A-Za-z_][A-Za-z0-9_]*$")]
 	private static partial Regex IdentifierPattern();
+
+	[GeneratedRegex("^[A-Za-z]+$")]
+	private static partial Regex WordPattern();
+
+	static readonly string[] Keys = ["descriptions", "namespace", "client", "output", "basePaths", "paging", "names", "singulars"];
+
+	static readonly string[] PagingKeys = ["offset", "limit", "totalHeader"];
+
+	static bool IsIdentifier(string text) => IdentifierPattern().IsMatch(text) && !Words.IsKeyword(text);
 
 	/// <summary>Reads a manifest; throws <see cref="ManifestException"/> naming the first problem.</summary>
 	public static Manifest Parse(string json)
@@ -58,6 +70,9 @@ public sealed partial record Manifest
 		if (parsed is not JsonObject root)
 			throw new ManifestException("the manifest must be a JSON object.");
 
+		if (root.Select(pair => pair.Key).FirstOrDefault(key => !key.StartsWith('$') && !Keys.Contains(key)) is { } unknown)
+			throw new ManifestException($"unknown key \"{unknown}\".");
+
 		var descriptions = Strings(root, "descriptions") ?? throw Missing("descriptions");
 
 		if (descriptions.Count == 0)
@@ -65,23 +80,35 @@ public sealed partial record Manifest
 
 		var @namespace = Text(root, "namespace") ?? throw Missing("namespace");
 
-		if (!@namespace.Split('.').All(IdentifierPattern().IsMatch))
+		if (!@namespace.Split('.').All(IsIdentifier))
 			throw new ManifestException($"\"namespace\" is not a valid C# namespace: {@namespace}");
 
 		var client = Text(root, "client") ?? throw Missing("client");
 
-		if (!IdentifierPattern().IsMatch(client))
+		if (!IsIdentifier(client))
 			throw new ManifestException($"\"client\" is not a valid C# identifier: {client}");
 
 		var names = new Dictionary<string, string>(StringComparer.Ordinal);
 
-		if (root["names"] is JsonObject overrides)
+		if (Section(root, "names") is { } overrides)
 			foreach (var (key, value) in overrides)
-				names[key] = value is JsonValue text && text.TryGetValue<string>(out var name) && IdentifierPattern().IsMatch(name)
+				names[key] = value is JsonValue text && text.TryGetValue<string>(out var name) && IsIdentifier(name)
 					? name
 					: throw new ManifestException($"\"names\".\"{key}\" must be a valid C# identifier.");
 
-		var paging = root["paging"] as JsonObject;
+		var singulars = new Dictionary<string, string>(StringComparer.Ordinal);
+
+		if (Section(root, "singulars") is { } plurals)
+			foreach (var (plural, value) in plurals)
+				singulars[plural.ToLowerInvariant()] = WordPattern().IsMatch(plural) && value is JsonValue word
+					&& word.TryGetValue<string>(out var singular) && WordPattern().IsMatch(singular)
+						? singular
+						: throw new ManifestException($"\"singulars\".\"{plural}\" must map one word to one word.");
+
+		var paging = Section(root, "paging");
+
+		if (paging?.Select(pair => pair.Key).FirstOrDefault(key => !PagingKeys.Contains(key)) is { } unknownPaging)
+			throw new ManifestException($"unknown key \"paging\".\"{unknownPaging}\".");
 		var defaults = new PagingConvention();
 
 		return new()
@@ -95,11 +122,19 @@ public sealed partial record Manifest
 				Text(paging, "offset") ?? defaults.Offset,
 				Text(paging, "limit") ?? defaults.Limit,
 				Text(paging, "totalHeader") ?? defaults.TotalHeader),
-			Names = names
+			Names = names,
+			Singulars = singulars
 		};
 	}
 
 	static ManifestException Missing(string key) => new($"\"{key}\" is required.");
+
+	static JsonObject? Section(JsonObject node, string key) => node[key] switch
+	{
+		null => null,
+		JsonObject section => section,
+		_ => throw new ManifestException($"\"{key}\" must be an object.")
+	};
 
 	static string? Text(JsonObject? node, string key) => node?[key] switch
 	{

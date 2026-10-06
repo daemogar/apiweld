@@ -7,11 +7,12 @@ namespace ApiWeld.Tests.Http;
 /// <summary>An in-memory server: answers each request with a function and records what was sent.</summary>
 sealed class FakeHandler(Func<HttpRequestMessage, string?, HttpResponseMessage> respond) : HttpMessageHandler
 {
-	public List<(HttpRequestMessage Request, string? Body)> Requests { get; } = [];
+	public List<(HttpRequestMessage Request, string? Body, string? ContentType)> Requests { get; } = [];
 
 	protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
 	{
 		string? body = null;
+		string? contentType = null;
 
 		if (request.Content is not null)
 		{
@@ -19,9 +20,10 @@ sealed class FakeHandler(Func<HttpRequestMessage, string?, HttpResponseMessage> 
 			using var stream = new MemoryStream();
 			await request.Content.CopyToAsync(stream, cancellationToken);
 			body = Encoding.UTF8.GetString(stream.ToArray());
+			contentType = request.Content.Headers.ContentType?.ToString();
 		}
 
-		Requests.Add((request, body));
+		Requests.Add((request, body, contentType));
 
 		return respond(request, body);
 	}

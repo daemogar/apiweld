@@ -70,6 +70,74 @@ public class RegistrationTests
 	}
 
 	[Fact]
+	public async Task Uses_a_token_exchange_configured_in_code()
+	{
+		var data = new FakeHandler((_, _) => new HttpResponseMessage(HttpStatusCode.OK));
+		var exchange = new FakeHandler((_, _) => new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent("tok") });
+
+		var services = new ServiceCollection();
+		services.AddApiWeldClient<SampleClient>(Section(new() { ["ExampleApi:BaseUrl"] = "https://api.example.test/" }))
+			.ConfigurePrimaryHttpMessageHandler(() => data);
+		services.Configure<ApiClientOptions<SampleClient>>(options => options.TokenExchange = new() { Endpoint = "/auth", ApiKey = "key" });
+		services.AddHttpClient(ApiWeldServiceCollectionExtensions.TokenExchangeClientName<SampleClient>())
+			.ConfigurePrimaryHttpMessageHandler(() => exchange);
+
+		await services.BuildServiceProvider().GetRequiredService<SampleClient>().Http.GetAsync("a", TestContext.Current.CancellationToken);
+
+		Assert.Equal("Bearer tok", data.Requests.Single().Request.Headers.Authorization?.ToString());
+	}
+
+	[Fact]
+	public async Task Sends_no_token_when_code_switches_off_a_configured_exchange()
+	{
+		var data = new FakeHandler((_, _) => new HttpResponseMessage(HttpStatusCode.OK));
+
+		var services = new ServiceCollection();
+		services.AddApiWeldClient<SampleClient>(Section(new()
+		{
+			["ExampleApi:BaseUrl"] = "https://api.example.test/",
+			["ExampleApi:TokenExchange:Endpoint"] = "/auth",
+			["ExampleApi:TokenExchange:ApiKey"] = "key"
+		})).ConfigurePrimaryHttpMessageHandler(() => data);
+		services.Configure<ApiClientOptions<SampleClient>>(options => options.TokenExchange = null);
+
+		await services.BuildServiceProvider().GetRequiredService<SampleClient>().Http.GetAsync("a", TestContext.Current.CancellationToken);
+
+		Assert.Null(data.Requests.Single().Request.Headers.Authorization);
+	}
+
+	[Fact]
+	public void Ignores_a_second_registration_of_the_same_client()
+	{
+		static int Actions(IServiceCollection services, string name) => services.BuildServiceProvider()
+			.GetRequiredService<IOptionsMonitor<HttpClientFactoryOptions>>().Get(name).HttpMessageHandlerBuilderActions.Count;
+
+		var once = new ServiceCollection();
+		var name = once.AddApiWeldClient<SampleClient>(Section(new() { ["ExampleApi:BaseUrl"] = "https://api.example.test/" })).Name;
+
+		var twice = new ServiceCollection();
+		var first = twice.AddApiWeldClient<SampleClient>(Section(new() { ["ExampleApi:BaseUrl"] = "https://api.example.test/" }));
+		var second = twice.AddApiWeldClient<SampleClient>(Section(new() { ["ExampleApi:BaseUrl"] = "https://other.example.test/" }));
+
+		Assert.Equal(first.Name, second.Name);
+		Assert.Equal(Actions(once, name), Actions(twice, first.Name));
+		Assert.Equal("https://api.example.test/", twice.BuildServiceProvider().GetRequiredService<SampleClient>().Http.BaseAddress!.ToString());
+	}
+
+	[Theory]
+	[InlineData("https://api.example.test/root?key=1")]
+	[InlineData("https://api.example.test/root#top")]
+	public void Refuses_a_base_url_with_a_query_or_fragment(string baseUrl)
+	{
+		var services = new ServiceCollection();
+		services.AddApiWeldClient<SampleClient>(Section(new() { ["ExampleApi:BaseUrl"] = baseUrl }));
+
+		var exception = Assert.Throws<OptionsValidationException>(() => services.BuildServiceProvider().GetRequiredService<SampleClient>());
+
+		Assert.Contains("query or fragment", exception.Message);
+	}
+
+	[Fact]
 	public async Task Posts_the_token_exchange_beneath_the_base_url()
 	{
 		var data = new FakeHandler((_, _) => new HttpResponseMessage(HttpStatusCode.OK));

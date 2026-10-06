@@ -17,9 +17,15 @@ public static class ApiWeldServiceCollectionExtensions
 	public static IHttpClientBuilder AddApiWeldClient<TClient>(this IServiceCollection services, IConfiguration section)
 		where TClient : ApiClient
 	{
+		// A repeat registration is ignored; see README.md, "Registration".
+		if (services.FirstOrDefault(service => service.ServiceType == typeof(Registered<TClient>))?.ImplementationInstance is Registered<TClient> registered)
+			return services.AddHttpClient(registered.Name);
+
 		services.AddOptions<ApiClientOptions<TClient>>()
 			.Bind(section)
 			.Validate(options => options.BaseUrl is { IsAbsoluteUri: true }, "BaseUrl is required and must be an absolute URL.")
+			.Validate(options => options.BaseUrl is not { IsAbsoluteUri: true } url || (url.Query.Length == 0 && url.Fragment.Length == 0),
+				"BaseUrl must not carry a query or fragment.")
 			.Validate(options => options.TokenExchange is null
 				|| (!string.IsNullOrWhiteSpace(options.TokenExchange.Endpoint) && !string.IsNullOrWhiteSpace(options.TokenExchange.ApiKey)),
 				"TokenExchange needs both Endpoint and ApiKey.")
@@ -27,26 +33,25 @@ public static class ApiWeldServiceCollectionExtensions
 
 		services.TryAddSingleton(provider => provider.GetRequiredService<IOptions<ApiClientOptions<TClient>>>().Value);
 
-		var exchanges = section.GetSection(nameof(ApiClientOptions.TokenExchange)).Exists();
 		var exchangeName = TokenExchangeClientName<TClient>();
 
-		if (exchanges)
-		{
-			services.AddHttpClient(exchangeName, (provider, http) => Configure(provider.GetRequiredService<ApiClientOptions<TClient>>(), http))
-				.ConfigurePrimaryHttpMessageHandler(PrimaryHandler<TClient>)
-				.SetHandlerLifetime(Timeout.InfiniteTimeSpan);
-			services.TryAddKeyedSingleton(exchangeName, (provider, _) => new TokenSource(
-				provider.GetRequiredService<ApiClientOptions<TClient>>().TokenExchange!,
-				provider.GetRequiredService<IHttpClientFactory>().CreateClient(exchangeName),
-				provider.GetService<TimeProvider>()));
-		}
-
-		var builder = services.AddHttpClient<TClient>((provider, http) => Configure(provider.GetRequiredService<ApiClientOptions<TClient>>(), http))
+		services.AddHttpClient(exchangeName, (provider, http) => Configure(provider.GetRequiredService<ApiClientOptions<TClient>>(), http))
 			.ConfigurePrimaryHttpMessageHandler(PrimaryHandler<TClient>)
 			.SetHandlerLifetime(Timeout.InfiniteTimeSpan);
+		services.TryAddKeyedSingleton(exchangeName, (provider, _) => new TokenSource(
+			provider.GetRequiredService<ApiClientOptions<TClient>>().TokenExchange!,
+			provider.GetRequiredService<IHttpClientFactory>().CreateClient(exchangeName),
+			provider.GetService<TimeProvider>()));
 
-		if (exchanges)
-			builder.AddHttpMessageHandler(provider => new TokenExchangeHandler(provider.GetRequiredKeyedService<TokenSource>(exchangeName)));
+		// Chosen when the pipeline is built, so an exchange configured in code counts as much as one in the section.
+		var builder = services.AddHttpClient<TClient>((provider, http) => Configure(provider.GetRequiredService<ApiClientOptions<TClient>>(), http))
+			.ConfigurePrimaryHttpMessageHandler(PrimaryHandler<TClient>)
+			.SetHandlerLifetime(Timeout.InfiniteTimeSpan)
+			.AddHttpMessageHandler(provider => provider.GetRequiredService<ApiClientOptions<TClient>>().TokenExchange is null
+				? new PassThroughHandler()
+				: new TokenExchangeHandler(provider.GetRequiredKeyedService<TokenSource>(exchangeName)));
+
+		services.AddSingleton(new Registered<TClient>(builder.Name));
 
 		return builder;
 	}
@@ -62,4 +67,7 @@ public static class ApiWeldServiceCollectionExtensions
 		http.BaseAddress = baseUrl.AbsoluteUri.EndsWith('/') ? baseUrl : new Uri(baseUrl.AbsoluteUri + "/");
 		http.Timeout = options.Timeout;
 	}
+
+	/// <summary>Records that a client type is registered, and under which client name.</summary>
+	sealed record Registered<TClient>(string Name);
 }

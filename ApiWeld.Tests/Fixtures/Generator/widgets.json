@@ -8,7 +8,8 @@
           { "name": "offset", "in": "query", "schema": { "type": "integer" } },
           { "name": "limit", "in": "query", "schema": { "type": "integer" } },
           { "name": "criteria", "in": "query", "description": "A JSON filter.", "schema": { "type": "string" } },
-          { "name": "Accept", "in": "header", "schema": { "type": "string" } }
+          { "name": "Accept", "in": "header", "schema": { "type": "string" } },
+          { "name": "X-Request-Id", "in": "header", "description": "Correlates the request.", "schema": { "type": "string" } }
         ],
         "responses": {
           "200": {

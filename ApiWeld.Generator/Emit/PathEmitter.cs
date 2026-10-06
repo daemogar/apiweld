@@ -35,7 +35,7 @@ internal static class PathEmitter
 			if (!child.IsParameter)
 			{
 				writer.Summary($"The path {child.Display}.");
-				writer.Line($"public {child.ClassBase}Node {Words.Identifier(Words.Pascal(child.Segment))} => new(transport, {values});");
+				writer.Line($"public {ReservedNames.Node(child)} {Words.Identifier(Words.Pascal(child.Segment))} => new(transport, {values});");
 				continue;
 			}
 
@@ -45,18 +45,18 @@ internal static class PathEmitter
 			if (child.ParameterType == "Guid")
 			{
 				writer.Summary($"The item at {child.Display}.");
-				writer.Line($"public {child.ClassBase}Node this[Guid {name}] => new(transport, [{prefix}{name}.ToString(\"D\")]);");
+				writer.Line($"public {ReservedNames.Node(child)} this[Guid {name}] => new(transport, [{prefix}{name}.ToString(\"D\")]);");
 				writer.Line();
 			}
 
 			writer.Summary($"The item at {child.Display}.");
-			writer.Line($"public {child.ClassBase}Node this[string {name}] => new(transport, [{prefix}{name}]);");
+			writer.Line($"public {ReservedNames.Node(child)} this[string {name}] => new(transport, [{prefix}{name}]);");
 		}
 	}
 
 	static void Node(CodeWriter writer, PathNode node)
 	{
-		var type = node.ClassBase + "Node";
+		var type = ReservedNames.Node(node);
 
 		writer.Line();
 		writer.Summary($"The path {node.Display}.");
@@ -68,7 +68,7 @@ internal static class PathEmitter
 		{
 			writer.Line();
 			writer.Summary(VersionSummary(operations[0]));
-			writer.Line($"public {node.ClassBase}{member}Operations {member} => new(transport, path);");
+			writer.Line($"public {ReservedNames.Operations(node, member)} {member} => new(transport, path);");
 		}
 
 		writer.Close();
@@ -91,7 +91,7 @@ internal static class PathEmitter
 
 	static void Operations(CodeWriter writer, PathNode node, string member, List<OperationModel> operations, PagingConvention paging)
 	{
-		var type = $"{node.ClassBase}{member}Operations";
+		var type = ReservedNames.Operations(node, member);
 
 		writer.Line();
 		writer.Summary($"{VersionSummary(operations[0])} Operations on {node.Display}.");
@@ -144,7 +144,7 @@ internal static class PathEmitter
 		var verb = method.ToUpperInvariant();
 		var descriptor = method + "Operation";
 		var where = node.Display;
-		var query = operation.Parameters.Count > 0 ? $"{node.ClassBase}{member}{method}Query" : null;
+		var query = operation.Parameters.Count > 0 ? ReservedNames.Query(node, member, method) : null;
 		var body = operation.Request is { } request ? TypeNames.Of(request) : null;
 		var bodyParameter = body is null ? "" : $"{body} body, ";
 		var bodyArgument = body is null ? "" : "body, ";
@@ -217,7 +217,7 @@ internal static class PathEmitter
 
 	static void Query(CodeWriter writer, PathNode node, string member, OperationModel operation)
 	{
-		var type = $"{node.ClassBase}{member}{operation.Method}Query";
+		var type = ReservedNames.Query(node, member, operation.Method);
 		var taken = new HashSet<string>(StringComparer.Ordinal) { type };
 		var members = new List<(QueryParameter Parameter, string Member)>();
 

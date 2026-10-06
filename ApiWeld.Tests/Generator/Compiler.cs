@@ -17,14 +17,21 @@ static class Compiler
 		.Distinct(StringComparer.OrdinalIgnoreCase)
 		.Select(path => MetadataReference.CreateFromFile(path))];
 
-	public static (Assembly? Assembly, IReadOnlyList<string> Diagnostics) Compile(IEnumerable<(string Path, string Source)> sources)
+	/// <summary>The compilation of <paramref name="sources"/>, for tests that read its semantic model.</summary>
+	public static CSharpCompilation Create(IEnumerable<(string Path, string Source)> sources)
 	{
 		var parse = new CSharpParseOptions(LanguageVersion.CSharp14, DocumentationMode.Diagnose);
-		var compilation = CSharpCompilation.Create(
+
+		return CSharpCompilation.Create(
 			"Generated" + Guid.NewGuid().ToString("N"),
 			sources.Select(source => CSharpSyntaxTree.ParseText(source.Source, parse, source.Path)),
 			References,
 			new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, nullableContextOptions: NullableContextOptions.Enable, warningLevel: 9999));
+	}
+
+	public static (Assembly? Assembly, IReadOnlyList<string> Diagnostics) Compile(IEnumerable<(string Path, string Source)> sources)
+	{
+		var compilation = Create(sources);
 
 		using var image = new MemoryStream();
 		var result = compilation.Emit(image, xmlDocumentationStream: new MemoryStream());

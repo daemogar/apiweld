@@ -36,6 +36,12 @@ public class TokenExchangeTests
 		}
 	}
 
+	/// <summary>A server whose answer is awaited, so a test can hold requests in flight.</summary>
+	sealed class AsyncHandler(Func<HttpRequestMessage, Task<HttpResponseMessage>> respond) : HttpMessageHandler
+	{
+		protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken) => respond(request);
+	}
+
 	static readonly DateTimeOffset Start = new(2026, 9, 29, 12, 0, 0, TimeSpan.Zero);
 
 	static string Base64Url(string json) => Convert.ToBase64String(Encoding.UTF8.GetBytes(json)).TrimEnd('=').Replace('+', '-').Replace('/', '_');
@@ -153,6 +159,111 @@ public class TokenExchangeTests
 		await client.GetAsync("a", TestContext.Current.CancellationToken);
 
 		Assert.Equal("Bearer from-json", Bearer(data, 0));
+	}
+
+	[Fact]
+	public async Task Exchanges_once_for_concurrent_requests()
+	{
+		var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+		var exchanges = 0;
+		var exchange = new AsyncHandler(async _ =>
+		{
+			Interlocked.Increment(ref exchanges);
+			await release.Task;
+
+			return new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent("token-1") };
+		});
+		var source = new TokenSource(Options(), new HttpClient(exchange) { BaseAddress = new Uri("https://api.example.test/") });
+
+		var callers = Enumerable.Range(0, 8).Select(_ => source.GetAsync(TestContext.Current.CancellationToken)).ToList();
+		release.SetResult();
+
+		Assert.All(await Task.WhenAll(callers), token => Assert.Equal("token-1", token));
+		Assert.Equal(1, exchanges);
+	}
+
+	[Fact]
+	public async Task Exchanges_once_when_concurrent_requests_are_refused_together()
+	{
+		var issued = 0;
+		var exchange = new FakeHandler((_, _) => new HttpResponseMessage(HttpStatusCode.OK)
+		{
+			Content = new StringContent($"token-{Interlocked.Increment(ref issued)}")
+		});
+		var bothSent = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+		var stale = 0;
+		var data = new AsyncHandler(async request =>
+		{
+			if (request.Headers.Authorization?.Parameter != "token-1")
+				return new HttpResponseMessage(HttpStatusCode.OK);
+
+			if (Interlocked.Increment(ref stale) == 2)
+				bothSent.SetResult();
+
+			await bothSent.Task;
+
+			return new HttpResponseMessage(HttpStatusCode.Unauthorized);
+		});
+		var source = new TokenSource(Options(), exchange.Client());
+		var client = new HttpClient(new TokenExchangeHandler(source) { InnerHandler = data }) { BaseAddress = new Uri("https://api.example.test/") };
+
+		var responses = await Task.WhenAll(
+			client.GetAsync("a", TestContext.Current.CancellationToken),
+			client.GetAsync("b", TestContext.Current.CancellationToken));
+
+		Assert.All(responses, response => Assert.Equal(HttpStatusCode.OK, response.StatusCode));
+		Assert.Equal(2, exchange.Requests.Count);
+	}
+
+	[Fact]
+	public async Task Disposes_the_retried_request_once_it_is_answered()
+	{
+		var (client, _, data, _) = Setup(["token-1", "token-2"], [HttpStatusCode.Unauthorized, HttpStatusCode.OK]);
+
+		using var response = await client.PostAsync("api/widgets", new StringContent("{}"), TestContext.Current.CancellationToken);
+
+		Assert.Throws<ObjectDisposedException>(() => data.Requests[1].Request.Content!.ReadAsStream(TestContext.Current.CancellationToken));
+	}
+
+	[Fact]
+	public async Task Reports_an_exchange_that_cannot_reach_the_endpoint()
+	{
+		var exchange = new FakeHandler((_, _) => throw new HttpRequestException("No connection could be made."));
+		var source = new TokenSource(Options(), exchange.Client());
+
+		var exception = await Assert.ThrowsAsync<TokenExchangeException>(() => source.GetAsync(TestContext.Current.CancellationToken));
+
+		Assert.Equal("Token exchange at /auth could not be completed: No connection could be made.", exception.Message);
+		Assert.IsType<HttpRequestException>(exception.InnerException);
+		Assert.DoesNotContain("secret-key", exception.Message);
+	}
+
+	[Fact]
+	public async Task Reports_an_exchange_that_times_out()
+	{
+		var exchange = new FakeHandler((_, _) => throw new TaskCanceledException("The request timed out.", new TimeoutException()));
+		var source = new TokenSource(Options(), exchange.Client());
+
+		var exception = await Assert.ThrowsAsync<TokenExchangeException>(() => source.GetAsync(TestContext.Current.CancellationToken));
+
+		Assert.Equal("Token exchange at /auth could not be completed: The request timed out.", exception.Message);
+		Assert.IsType<TaskCanceledException>(exception.InnerException);
+	}
+
+	[Fact]
+	public async Task Lets_the_callers_own_cancellation_through_unwrapped()
+	{
+		using var cancel = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
+		var exchange = new FakeHandler((_, _) =>
+		{
+			cancel.Cancel();
+			throw new OperationCanceledException(cancel.Token);
+		});
+		var source = new TokenSource(Options(), exchange.Client());
+
+		var exception = await Assert.ThrowsAnyAsync<OperationCanceledException>(() => source.GetAsync(cancel.Token));
+
+		Assert.IsNotType<TokenExchangeException>(exception);
 	}
 
 	[Fact]

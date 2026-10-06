@@ -25,7 +25,11 @@ public class EndToEndTests
 			public static async Task<string> RunAsync(HttpClient http)
 			{
 				var api = new ExampleClient(http).Paths;
-				var all = await api.Widgets.V2.GetAsync(query => query.Criteria = "{}");
+				var all = await api.Widgets.V2.GetAsync(query =>
+				{
+					query.Criteria = "{}";
+					query.XRequestId = "r-1";
+				});
 				var page = await api.Widgets.V2.GetPagedAsync(0, 2);
 				var streamed = 0;
 
@@ -102,5 +106,14 @@ public class EndToEndTests
 
 		var delete = server.Requests.Single(r => r.Request.Method == HttpMethod.Delete).Request;
 		Assert.Equal("application/vnd.example.v2+json", string.Join(", ", delete.Headers.Accept));
+
+		var walked = server.Requests.Where(r => r.Request.RequestUri!.Query.Contains("criteria=")).ToList();
+		Assert.Equal(2, walked.Count);
+		Assert.All(walked, r => Assert.Equal("r-1", Assert.Single(r.Request.Headers.GetValues("X-Request-Id"))));
+
+		var post = server.Requests.Single(r => r.Request.Method == HttpMethod.Post);
+		Assert.Equal("application/vnd.example.v2+json", post.ContentType);
+		Assert.Equal("""{"name":"new","status":"active"}""", post.Body);
+		Assert.Equal("application/vnd.example.v2+json, application/vnd.example.errors.v1+json", string.Join(", ", post.Request.Headers.Accept));
 	}
 }
