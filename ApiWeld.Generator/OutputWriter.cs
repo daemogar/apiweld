@@ -48,11 +48,15 @@ public static class OutputWriter
 		if (errors.Count > 0 || !Directory.Exists(directory))
 			return errors;
 
-		foreach (var stale in Directory.EnumerateFiles(directory, "*.g.cs", SearchOption.AllDirectories)
+		List<string> stales = [];
+
+		if (!Attempt(directory, "list", () => stales = [.. Directory.EnumerateFiles(directory, "*.g.cs", SearchOption.AllDirectories)
 			.Select(Path.GetFullPath)
 			.Where(file => !targets.ContainsKey(file))
-			.Order(StringComparer.Ordinal)
-			.ToList())
+			.Order(StringComparer.Ordinal)], errors))
+			return errors;
+
+		foreach (var stale in stales)
 		{
 			var generated = false;
 
@@ -101,10 +105,14 @@ public static class OutputWriter
 			File.WriteAllBytes(target, bytes);
 	}
 
+	/// <summary>Whether <paramref name="folder"/> lies beneath the output folder and so may be removed once empty.</summary>
+	internal static bool MayRemove(string root, string folder)
+		=> IsInside(root, folder) && !string.Equals(RootOf(folder), root, StringComparison.OrdinalIgnoreCase);
+
 	/// <summary>Removes <paramref name="folder"/> and each parent left empty, stopping at the output folder itself.</summary>
 	static void RemoveEmptyFolders(string folder, string root)
 	{
-		while (IsInside(root, folder) && !Directory.EnumerateFileSystemEntries(folder).Any())
+		while (MayRemove(root, folder) && !Directory.EnumerateFileSystemEntries(folder).Any())
 		{
 			Directory.Delete(folder);
 			folder = Path.GetDirectoryName(folder)!;

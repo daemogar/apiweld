@@ -1,4 +1,7 @@
-﻿using System.Text;
+﻿using System.Runtime.Versioning;
+using System.Security.AccessControl;
+using System.Security.Principal;
+using System.Text;
 
 using ApiWeld.Generator;
 
@@ -165,6 +168,76 @@ public class OutputWriterTests : IDisposable
 		Assert.False(File.Exists(At("Stale.g.cs")));
 		Assert.True(Directory.Exists(At("Mine")));
 		Assert.True(Directory.Exists(folder));
+	}
+
+	[Fact]
+	public void Never_removes_the_output_folder_itself()
+	{
+		Put("Stale.g.cs", Header);
+
+		Assert.Empty(OutputWriter.Write(folder, []));
+
+		Assert.False(File.Exists(At("Stale.g.cs")));
+		Assert.True(Directory.Exists(folder));
+	}
+
+	[Fact]
+	public void Stops_removing_folders_at_the_output_folder_even_at_a_drive_root()
+	{
+		var driveRoot = Path.GetPathRoot(folder)!;
+		var root = OutputWriter.RootOf(driveRoot);
+
+		Assert.False(OutputWriter.MayRemove(root, driveRoot));
+		Assert.True(OutputWriter.MayRemove(root, Path.Combine(driveRoot, "Old")));
+		Assert.False(OutputWriter.MayRemove(OutputWriter.RootOf(folder), folder));
+	}
+
+	[Fact]
+	public void Reports_a_subfolder_it_cannot_list_instead_of_throwing()
+	{
+		var locked = Directory.CreateDirectory(At("Locked"));
+		using var restore = Lock(locked);
+
+		var diagnostics = OutputWriter.Write(folder, [Generated("A.g.cs")]);
+
+		Assert.Contains(diagnostics, d => d.Severity == Severity.Error && d.Message.Contains("could not list"));
+	}
+
+	/// <summary>Takes away the right to list <paramref name="directory"/>; disposing gives it back.</summary>
+	static IDisposable Lock(DirectoryInfo directory)
+	{
+		if (OperatingSystem.IsWindows())
+			return LockOnWindows(directory);
+
+		return LockOnUnix(directory);
+	}
+
+	[SupportedOSPlatform("windows")]
+	static IDisposable LockOnWindows(DirectoryInfo directory)
+	{
+		var security = directory.GetAccessControl();
+		var rule = new FileSystemAccessRule(WindowsIdentity.GetCurrent().User!, FileSystemRights.ListDirectory, AccessControlType.Deny);
+		security.AddAccessRule(rule);
+		directory.SetAccessControl(security);
+
+		return new Restore(() =>
+		{
+			security.RemoveAccessRule(rule);
+			directory.SetAccessControl(security);
+		});
+	}
+
+	[UnsupportedOSPlatform("windows")]
+	static IDisposable LockOnUnix(DirectoryInfo directory)
+	{
+		File.SetUnixFileMode(directory.FullName, UnixFileMode.None);
+
+		return new Restore(() => File.SetUnixFileMode(directory.FullName, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute));
+	}
+
+	sealed class Restore(Action undo) : IDisposable
+	{
+		public void Dispose() => undo();
 	}
 
 	[Fact]
