@@ -599,6 +599,11 @@ public sealed class WidgetsV2Operations
 		{
 			[400] = ApiResponseException<ErrorsV1>.Create,
 		},
+		ErrorRanges = new Dictionary<int, ApiErrorFactory>
+		{
+			[5] = ApiResponseException<ErrorsV1>.Create,
+		},
+		DefaultError = ApiResponseException<ErrorsV1>.Create,
 	};
 
 	readonly ApiTransport transport;

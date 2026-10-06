@@ -20,4 +20,10 @@ public sealed record ApiOperation(HttpMethod Method, string Template)
 
 	/// <summary>Exception factories by declared error status.</summary>
 	public IReadOnlyDictionary<int, ApiErrorFactory> Errors { get; init; } = new Dictionary<int, ApiErrorFactory>();
+
+	/// <summary>Exception factories by declared status range, keyed by its first digit: 4 for <c>4XX</c>.</summary>
+	public IReadOnlyDictionary<int, ApiErrorFactory> ErrorRanges { get; init; } = new Dictionary<int, ApiErrorFactory>();
+
+	/// <summary>The factory for a status no code or range declares, from the <c>default</c> response.</summary>
+	public ApiErrorFactory? DefaultError { get; init; }
 }

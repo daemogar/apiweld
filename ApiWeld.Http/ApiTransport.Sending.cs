@@ -42,9 +42,15 @@ public sealed partial class ApiTransport
 	{
 		var context = new ApiErrorContext(response.StatusCode, body, operation.Method, operation.Template, operation.Version);
 
-		return operation.Errors.TryGetValue((int)response.StatusCode, out var factory)
-			? factory(context, Json)
-			: ApiResponseException.Create(context, Json);
+		var status = (int)response.StatusCode;
+
+		// The most specific declaration wins, as OpenAPI defines it.
+		var factory = operation.Errors.GetValueOrDefault(status)
+			?? operation.ErrorRanges.GetValueOrDefault(status / 100)
+			?? operation.DefaultError
+			?? ApiResponseException.Create;
+
+		return factory(context, Json);
 	}
 
 	void CheckVersion(ApiOperation operation, HttpResponseMessage response)

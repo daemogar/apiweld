@@ -116,8 +116,8 @@ internal sealed class ApiModelBuilder
 			? shapes.Build(requestSchema, document, context with { Suffix = "Request", Direction = Direction.Request })
 			: null;
 
-		var (errors, errorTypes) = Errors(file, document, resource, operation);
-		var accept = string.Join(", ", new[] { mediaType }.OfType<string>().Concat(errorTypes.Where(type => type != mediaType)));
+		var errors = Errors(file, document, resource, operation);
+		var accept = string.Join(", ", new[] { mediaType }.OfType<string>().Concat(errors.MediaTypes.Where(type => type != mediaType)));
 		var parameters = Parameters(file, label, document, item, operation, out var pathTypes);
 		var paged = method == "get" && response is ListRef
 			&& parameters.Any(p => p.In == "query" && p.Name == manifest.Paging.Offset)
@@ -143,7 +143,9 @@ internal sealed class ApiModelBuilder
 			Request = request,
 			IsPaged = paged,
 			Parameters = parameters,
-			Errors = errors
+			Errors = errors.Codes,
+			ErrorRanges = errors.Ranges,
+			DefaultError = errors.Default
 		};
 
 		if (!node.Versions.TryGetValue(member, out var list))
@@ -175,21 +177,32 @@ internal sealed class ApiModelBuilder
 	static bool HasDefaultBody(JsonObject operation, JsonObject document)
 		=> References.Resolve((operation["responses"] as JsonObject)?["default"], document).Node?["content"] is JsonObject { Count: > 0 };
 
-	(SortedDictionary<int, TypeRef> Types, List<string> MediaTypes) Errors(string file, JsonObject document, string resource, JsonObject operation)
+	/// <summary>An operation's declared error bodies: by exact code, by range, and the <c>default</c> fallback.</summary>
+	sealed record ErrorBodies(SortedDictionary<int, TypeRef> Codes, SortedDictionary<int, TypeRef> Ranges, List<string> MediaTypes)
 	{
-		var types = new SortedDictionary<int, TypeRef>();
-		var mediaTypes = new List<string>();
+		public TypeRef? Default { get; set; }
+	}
+
+	ErrorBodies Errors(string file, JsonObject document, string resource, JsonObject operation)
+	{
+		var errors = new ErrorBodies(new(), new(), []);
 
 		foreach (var (status, value) in (operation["responses"] as JsonObject ?? new JsonObject()).OrderBy(response => response.Key, StringComparer.Ordinal))
 		{
-			if (!int.TryParse(status, out var code) || code < 400)
+			var code = int.TryParse(status, out var exact) && exact >= 400 ? exact : (int?)null;
+			var range = status.Length == 3 && status[0] is ('4' or '5') &&status[1..].Equals("XX", StringComparison.OrdinalIgnoreCase)
+				? status[0] - '0'
+				: (int?)null;
+			var isDefault = status == "default";
+
+			if (code is null && range is null && !isDefault)
 				continue;
 
 			if (MediaTypes.Pick(References.Resolve(value, document).Node?["content"]) is not { } error)
 				continue;
 
-			if (!mediaTypes.Contains(error.MediaType))
-				mediaTypes.Add(error.MediaType);
+			if (!errors.MediaTypes.Contains(error.MediaType))
+				errors.MediaTypes.Add(error.MediaType);
 
 			if (error.Schema is null)
 				continue;
@@ -197,11 +210,17 @@ internal sealed class ApiModelBuilder
 			var errorVersion = MediaTypeVersion.Read(error.MediaType);
 			var context = new NameContext(resource + "Error", errorVersion is null ? "" : MediaTypeVersion.MemberName(errorVersion),
 				"", [], "", Direction.Error, false, file, ErrorRoot: true) { Singulars = manifest.Singulars };
+			var type = shapes.Build(error.Schema, document, context);
 
-			types[code] = shapes.Build(error.Schema, document, context);
+			if (code is { } c)
+				errors.Codes[c] = type;
+			else if (range is { } r)
+				errors.Ranges[r] = type;
+			else
+				errors.Default = type;
 		}
 
-		return (types, mediaTypes);
+		return errors;
 	}
 
 	List<QueryParameter> Parameters(string file, string label, JsonObject document, JsonObject item, JsonObject operation, out Dictionary<string, string> pathTypes)

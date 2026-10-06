@@ -69,6 +69,11 @@ internal sealed class OperationModel
 	public List<QueryParameter> Parameters { get; init; } = [];
 
 	public SortedDictionary<int, TypeRef> Errors { get; init; } = new();
+
+	/// <summary>Error bodies declared as a range, keyed by its first digit: 4 for <c>4XX</c>.</summary>
+	public SortedDictionary<int, TypeRef> ErrorRanges { get; init; } = new();
+
+	public TypeRef? DefaultError { get; init; }
 }
 
 /// <summary>Everything generated from a set of descriptions.</summary>

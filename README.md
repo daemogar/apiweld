@@ -270,6 +270,8 @@ Setting `VersionMismatch` to `Warn` logs a warning instead of throwing.
 A non-2xx response throws `ApiResponseException`. When the description declares a body for that
 status, the exception is the generic `ApiResponseException<TError>` with the body read into
 `Error`; either way the raw body, status, method, URL template and requested version are kept.
+The body type is looked up the way OpenAPI defines precedence: the exact code (`404`) first,
+then its range (`4XX` or `5XX`), then `default`.
 
 ### Page walking
 
