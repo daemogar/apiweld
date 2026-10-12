@@ -44,5 +44,5 @@ docs/
 # Execution workspace, scratch
 .superpowers/
 
-# Verify received files
+# Snapshot received files
 *.received.*
