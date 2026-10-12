@@ -1,6 +1,8 @@
 ﻿using ApiWeld.Generator;
 using ApiWeld.Generator.Emit;
 
+using SGSnap;
+
 namespace ApiWeld.Tests.Generator;
 
 public class ModelEmitterTests
@@ -31,7 +33,7 @@ public class ModelEmitterTests
 
 	[Fact]
 	public Task Writes_a_class_per_object_and_a_struct_per_enum()
-		=> Verify(string.Join("\n", Emit().Select(file => $"==== {file.Path} ====\n{file.Content}"))).UseDirectory("Snapshots");
+		=> Snapshot.Match(string.Join("\n", Emit().Select(file => $"==== {file.Path} ====\n{file.Content}")), new SnapshotSettings { Directory = "Snapshots" });
 
 	[Fact]
 	public void The_models_compile_without_errors_or_warnings()

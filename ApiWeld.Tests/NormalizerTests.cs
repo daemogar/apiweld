@@ -5,6 +5,8 @@ using System.Text.Json.Nodes;
 
 using ApiWeld.Core;
 
+using SGSnap;
+
 namespace ApiWeld.Tests;
 
 public class NormalizerTests
@@ -33,7 +35,7 @@ public class NormalizerTests
 	{
 		var result = OpenApiNormalizer.Normalize(Fixture("composite.json"), "widgets");
 
-		return Verify(Render(result)).UseDirectory("Snapshots");
+		return Snapshot.Match(Render(result), new SnapshotSettings { Directory = "Snapshots" });
 	}
 
 	[Fact]

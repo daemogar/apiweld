@@ -4,6 +4,8 @@ using ApiWeld.Generator.Emit;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 
+using SGSnap;
+
 namespace ApiWeld.Tests.Generator;
 
 public class EmissionTests
@@ -61,7 +63,7 @@ public class EmissionTests
 		var text = string.Join("\n", result.Diagnostics) + "\n\n"
 			+ string.Join("\n", result.Files.Select(file => $"==== {file.Path} ====\n{file.Content}"));
 
-		return Verify(text).UseDirectory("Snapshots");
+		return Snapshot.Match(text, new SnapshotSettings { Directory = "Snapshots" });
 	}
 
 	[Fact]
