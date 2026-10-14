@@ -199,7 +199,11 @@ A generated type is named `{Root}{Version}{Path}{Suffix}`:
   type supplies one, so the version is not written twice.
 
 Types merge when their shape and direction are identical, across files as well as within one,
-and a merged type takes its shortest candidate name, ties broken in ordinal order. When
+and a merged type takes its shortest candidate name, ties broken in ordinal order. A part merged
+from more than one description, reached at the same path in each, is named by that shared tail
+alone — `metadata` in every description becomes `MetadataResponse`, not one description's
+`{Root}{Version}MetadataResponse`. A whole body shared by several descriptions keeps the shortest
+name, since it has no tail to share. When
 different shapes want one name, the one a GET returns keeps it — or, when no GET returns
 any of them, the one reached from strictly the most descriptions — and the others gain their
 verb after the version (`ThingV1PostResponse`), with a warning. When the verb does not separate

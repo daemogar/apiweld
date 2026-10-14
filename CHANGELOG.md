@@ -33,6 +33,8 @@
 
 ### Fixed
 
+- `ApiWeld.Generator`: a part shared by several descriptions at the same path is named by that
+  path (`MetadataResponse`) instead of after whichever description had the shortest name.
 - `ApiWeld.Generator`: different shapes that want one name and that the verb cannot separate —
   two bodies of the same verb on different routes, or error bodies that differ between
   descriptions — are now told apart by their route or their description instead of failing

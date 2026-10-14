@@ -14,7 +14,7 @@ internal static class NameResolver
 				.ThenBy(candidate => candidate.Root, StringComparer.Ordinal)
 				.ThenBy(candidate => candidate.Route, StringComparer.Ordinal)
 				.First();
-			model.Name = Words.Identifier(model.Chosen.Plain);
+			model.Name = Words.Identifier(SharedTail(model) ?? model.Chosen.Plain);
 		}
 
 		var kept = new HashSet<ModelType>();
@@ -62,6 +62,19 @@ internal static class NameResolver
 
 		foreach (var model in models.Where(model => model.Name == client))
 			diagnostics.Error($"{client}: a generated type would share the client's name; add a \"names\" entry.");
+	}
+
+	/// <summary>The path and suffix every candidate shares, when the candidates come from more than one base and the path is not empty.</summary>
+	static string? SharedTail(ModelType model)
+	{
+		var first = model.Candidates[0];
+		var tail = first.Path + first.Suffix;
+
+		return first.Path.Length > 0
+			&& model.Candidates.Select(candidate => candidate.Base).Distinct(StringComparer.Ordinal).Count() > 1
+			&& model.Candidates.All(candidate => candidate.Path + candidate.Suffix == tail)
+			? tail
+			: null;
 	}
 
 	/// <summary>The shape a GET returns; else the one reached from strictly the most descriptions; else none.</summary>

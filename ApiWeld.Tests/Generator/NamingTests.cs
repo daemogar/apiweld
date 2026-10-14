@@ -61,18 +61,58 @@ public class NamingTests
 	}
 
 	[Fact]
-	public void Breaks_a_length_tie_in_ordinal_order()
+	public void Names_a_part_shared_by_several_descriptions_by_the_tail_they_share()
 	{
 		const string dimensions = """{ "type": "object", "properties": { "width": { "type": "number" } } }""";
 		var widget = Descriptions.Returns("application/vnd.example.v2+json", $$"""{ "type": "object", "properties": { "name": { "type": "string" }, "dimensions": {{dimensions}} } }""");
 		var gadget = Descriptions.Returns("application/json", $$"""{ "type": "object", "properties": { "code": { "type": "string" }, "dimensions": {{dimensions}} } }""");
 
+		var (model, diagnostics) = Descriptions.Resolve(Plain,
+			("widgets.json", Descriptions.Document($$"""{ "/api/widgets": { "get": {{widget}} } }""", version: "2")),
+			("gadgets.json", Descriptions.Document($$"""{ "/api/gadgets": { "get": {{gadget}} } }""")));
+
+		Assert.DoesNotContain(diagnostics, d => d.Severity == Severity.Error);
+		Assert.Equal(new[] { "DimensionsResponse", "GadgetV0Response", "WidgetV2Response" }, Names(model));
+	}
+
+	[Fact]
+	public void Breaks_a_length_tie_in_ordinal_order()
+	{
+		const string size = """{ "type": "object", "properties": { "width": { "type": "number" } } }""";
+		var widget = Descriptions.Returns("application/vnd.example.v2+json", $$"""{ "type": "object", "properties": { "name": { "type": "string" }, "sizes": {{size}} } }""");
+		var gadget = Descriptions.Returns("application/json", $$"""{ "type": "object", "properties": { "code": { "type": "string" }, "areas": {{size}} } }""");
+
 		var (model, _) = Descriptions.Resolve(Plain,
 			("widgets.json", Descriptions.Document($$"""{ "/api/widgets": { "get": {{widget}} } }""", version: "2")),
 			("gadgets.json", Descriptions.Document($$"""{ "/api/gadgets": { "get": {{gadget}} } }""")));
 
-		Assert.Contains("GadgetV0DimensionsResponse", Names(model));
-		Assert.DoesNotContain("WidgetV2DimensionsResponse", Names(model));
+		Assert.Contains("GadgetV0AreasResponse", Names(model));
+		Assert.DoesNotContain("WidgetV2SizesResponse", Names(model));
+	}
+
+	[Fact]
+	public void Keeps_the_shortest_name_for_a_whole_body_shared_by_several_descriptions()
+	{
+		var (model, _) = Descriptions.Resolve(Plain,
+			("widgets.json", Descriptions.Document($$"""{ "/api/widgets": { "get": {{Descriptions.Returns("application/vnd.example.v2+json", Descriptions.Thing)}} } }""", version: "2")),
+			("gadgets.json", Descriptions.Document($$"""{ "/api/gadgets": { "get": {{Descriptions.Returns("application/json", Descriptions.Thing)}} } }""")));
+
+		Assert.Equal(new[] { "GadgetV0Response" }, Names(model));
+	}
+
+	[Fact]
+	public void Falls_back_when_two_shared_tails_collide()
+	{
+		static string With(string field) => $$"""{ "type": "object", "properties": { "code": { "type": "string" }, "dimensions": { "type": "object", "properties": { "{{field}}": { "type": "number" } } } } }""";
+		static (string, string) Described(string stem, string field)
+			=> (stem + ".json", Descriptions.Document($$"""{ "/api/{{stem}}": { "get": {{Descriptions.Returns("application/vnd.example.v1+json", With(field))}} } }""", version: "1"));
+
+		var (model, diagnostics) = Descriptions.Resolve(Plain,
+			Described("widgets", "width"), Described("gadgets", "width"), Described("sprockets", "height"), Described("cogs", "height"));
+
+		Assert.DoesNotContain(diagnostics, d => d.Severity == Severity.Error);
+		Assert.Equal(2, model.Models.Count(m => m.Name.EndsWith("DimensionsResponse", StringComparison.Ordinal)));
+		Assert.Single(model.Models, m => m.Name == "DimensionsResponse");
 	}
 
 	[Fact]
