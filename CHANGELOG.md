@@ -33,6 +33,10 @@
 
 ### Fixed
 
+- `ApiWeld.Generator`: different shapes that want one name and that the verb cannot separate —
+  two bodies of the same verb on different routes, or error bodies that differ between
+  descriptions — are now told apart by their route or their description instead of failing
+  generation; an error shape most descriptions share keeps the plain name.
 - `ApiWeld.Generator`: an error body whose schema name already ends in a version
   (`errors_2_0_0`) is no longer named with the version twice (`Errors200V2`); the suffix is
   dropped when the media type carries the version, giving `ErrorsV2`.

@@ -108,18 +108,110 @@ public class NamingTests
 	}
 
 	[Fact]
-	public void Refuses_a_clash_the_verb_cannot_settle()
+	public void Settles_get_shapes_the_verb_cannot_by_the_route_segments_that_differ()
 	{
 		static string Shape(string field) => $$"""{ "type": "object", "properties": { "{{field}}": { "type": "string" } } }""";
 		const string media = "application/vnd.example.v1+json";
 
-		var (_, diagnostics) = Descriptions.Resolve(Plain, ("things.json", Descriptions.Document($$"""
+		var (model, diagnostics) = Descriptions.Resolve(Plain, ("things.json", Descriptions.Document($$"""
 			{ "/api/things": { "get": {{Descriptions.Returns(media, Shape("a"))}} },
 			  "/api/things/{id}": { "get": {{Descriptions.Returns(media, Shape("b"))}} },
 			  "/api/things/{id}/more": { "get": {{Descriptions.Returns(media, Shape("c"))}} } }
 			""", version: "1")));
 
-		Assert.Contains(diagnostics, d => d.Severity == Severity.Error && d.Message.StartsWith("ThingV1GetResponse:") && d.Message.Contains("\"names\""));
+		Assert.DoesNotContain(diagnostics, d => d.Severity == Severity.Error);
+		Assert.Equal(new[] { "ThingV1GetItemMoreResponse", "ThingV1GetItemResponse", "ThingV1Response" }, Names(model));
+	}
+
+	[Fact]
+	public void Settles_two_same_verb_bodies_on_different_routes()
+	{
+		static string Post(string field) => $$"""
+			{ "requestBody": { "content": { "application/vnd.example.v1+json": { "schema": { "type": "object", "properties": { "{{field}}": { "type": "string" } } } } } },
+			  "responses": { "200": { "content": { "application/vnd.example.v1+json": { "schema": {{Descriptions.Thing}} } } } } }
+			""";
+
+		var (model, diagnostics) = Descriptions.Resolve(Plain, ("things.json", Descriptions.Document($$"""
+			{ "/api/things": { "post": {{Post("name")}} },
+			  "/api/search/things": { "post": {{Post("query")}} } }
+			""", version: "1")));
+
+		Assert.DoesNotContain(diagnostics, d => d.Severity == Severity.Error);
+		Assert.Equal(new[] { "ThingV1PostRequest", "ThingV1PostSearchRequest", "ThingV1Response" }, Names(model));
+	}
+
+	static string Failing(string path) => $$"""
+		{ "{{path}}": { "get": { "responses": {
+			"200": { "content": { "application/vnd.example.v1+json": { "schema": { "type": "string" } } } },
+			"400": { "content": { "application/vnd.example.errors.v2+json": { "schema": { "$ref": "#/components/schemas/errors" } } } } } } } }
+		""";
+
+	const string CommonErrors = """{ "errors": { "type": "object", "properties": { "code": { "type": "string" }, "description": { "type": "string" } } } }""";
+
+	const string OtherErrors = """{ "errors": { "type": "object", "properties": { "code": { "type": "string" }, "details": { "type": "string" } } } }""";
+
+	[Fact]
+	public void Lets_the_error_shape_most_descriptions_share_keep_its_name()
+	{
+		var (model, diagnostics) = Descriptions.Resolve(Plain,
+			("gadgets.json", Descriptions.Document(Failing("/api/gadgets"), CommonErrors, version: "1")),
+			("widgets.json", Descriptions.Document(Failing("/api/widgets"), CommonErrors, version: "1")),
+			("sprockets.json", Descriptions.Document(Failing("/api/sprockets"), OtherErrors, version: "1")));
+
+		Assert.DoesNotContain(diagnostics, d => d.Severity == Severity.Error);
+		Assert.Equal(new[] { "ErrorsV2", "SprocketErrorsV2" }, Names(model));
+	}
+
+	[Fact]
+	public void Prefixes_every_error_shape_with_its_description_when_none_is_shared_more()
+	{
+		var (model, diagnostics) = Descriptions.Resolve(Plain,
+			("gadgets.json", Descriptions.Document(Failing("/api/gadgets"), CommonErrors, version: "1")),
+			("sprockets.json", Descriptions.Document(Failing("/api/sprockets"), OtherErrors, version: "1")));
+
+		Assert.DoesNotContain(diagnostics, d => d.Severity == Severity.Error);
+		Assert.Equal(new[] { "GadgetErrorsV2", "SprocketErrorsV2" }, Names(model));
+	}
+
+	[Fact]
+	public void Names_do_not_depend_on_description_order()
+	{
+		// Two descriptions per shape: no keeper, so both merged shapes are prefixed by a root.
+		(string, string)[] files =
+		[
+			("widgets.json", Descriptions.Document(Failing("/api/widgets"), CommonErrors, version: "1")),
+			("gadgets.json", Descriptions.Document(Failing("/api/gadgets"), CommonErrors, version: "1")),
+			("sprockets.json", Descriptions.Document(Failing("/api/sprockets"), OtherErrors, version: "1")),
+			("cogs.json", Descriptions.Document(Failing("/api/cogs"), OtherErrors, version: "1"))
+		];
+
+		var forward = Names(Descriptions.Resolve(Plain, files).Model);
+		var backward = Names(Descriptions.Resolve(Plain, [.. files.Reverse()]).Model);
+
+		Assert.Equal(new[] { "CogErrorsV2", "GadgetErrorsV2" }, forward);
+		Assert.Equal(forward, backward);
+	}
+
+	[Fact]
+	public void Refuses_a_clash_neither_the_verb_nor_the_route_can_settle()
+	{
+		var manifest = Plain with { Names = new Dictionary<string, string> { ["first"] = "Shared", ["second"] = "Shared", ["third"] = "Shared" } };
+		const string body = """
+			{ "type": "object", "properties": {
+				"a": { "$ref": "#/components/schemas/first" },
+				"b": { "$ref": "#/components/schemas/second" },
+				"c": { "$ref": "#/components/schemas/third" } } }
+			""";
+		const string schemas = """
+			{ "first": { "type": "object", "properties": { "x": { "type": "string" } } },
+			  "second": { "type": "object", "properties": { "y": { "type": "string" } } },
+			  "third": { "type": "object", "properties": { "z": { "type": "string" } } } }
+			""";
+
+		var (_, diagnostics) = Descriptions.Resolve(manifest, ("things.json", Descriptions.Document(
+			$$"""{ "/api/things": { "get": {{Descriptions.Returns("application/vnd.example.v1+json", body)}} } }""", schemas, version: "1")));
+
+		Assert.Contains(diagnostics, d => d.Severity == Severity.Error && d.Message.StartsWith("SharedV1GetResponse:") && d.Message.Contains("\"names\""));
 	}
 
 	[Fact]

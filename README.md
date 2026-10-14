@@ -200,9 +200,14 @@ A generated type is named `{Root}{Version}{Path}{Suffix}`:
 
 Types merge when their shape and direction are identical, across files as well as within one,
 and a merged type takes its shortest candidate name, ties broken in ordinal order. When
-different shapes want one name, the one a GET returns keeps it and the others gain their verb
-after the version (`ThingV1PostResponse`), with a warning; a clash that survives that is an
-error naming the fix. A model may not take a name the generated navigation already has —
+different shapes want one name, the one a GET returns keeps it — or, when no GET returns
+any of them, the one reached from strictly the most descriptions — and the others gain their
+verb after the version (`ThingV1PostResponse`), with a warning. When the verb does not separate
+them, a third step does: shapes from different descriptions are prefixed with their
+description's root (`WidgetErrorsV2`), and shapes from one description gain the route segments
+the others do not share, after the verb (`ThingV1PostSearchRequest` for `POST /search/things`
+beside `POST /things`; a path parameter counts as `Item`). A clash that survives all three is
+an error naming the fix. A model may not take a name the generated navigation already has —
 `{Path}Node`, `{Path}{Version}Operations`, `{Path}{Version}{Verb}Query`, `{Client}Api` — nor the
 name of a type the generated code uses, such as `ApiTransport` or `JsonElement`; that is an error
 asking for a `names` entry.

@@ -108,7 +108,8 @@ internal sealed class ApiModelBuilder
 		var mediaType = picked?.MediaType ?? inherited?.MediaType;
 		var version = MediaTypeVersion.Read(mediaType);
 		var member = MediaTypeVersion.MemberName(version);
-		var context = new NameContext(resource, member, verb, [], "Response", Direction.Response, method == "get", file) { Singulars = manifest.Singulars };
+		var route = RouteName(path);
+		var context = new NameContext(resource, member, verb, [], "Response", Direction.Response, method == "get", file, Root: resource, Route: route) { Singulars = manifest.Singulars };
 		var response = picked?.Schema is { } schema ? shapes.Build(schema, document, context) : null;
 
 		var body = MediaTypes.Pick(References.Resolve(operation["requestBody"], document).Node?["content"]);
@@ -116,7 +117,7 @@ internal sealed class ApiModelBuilder
 			? shapes.Build(requestSchema, document, context with { Suffix = "Request", Direction = Direction.Request })
 			: null;
 
-		var errors = Errors(file, document, resource, operation);
+		var errors = Errors(file, document, resource, route, operation);
 		var accept = string.Join(", ", new[] { mediaType }.OfType<string>().Concat(errors.MediaTypes.Where(type => type != mediaType)));
 		var parameters = Parameters(file, label, document, item, operation, out var pathTypes);
 		var paged = method == "get" && response is ListRef
@@ -183,7 +184,7 @@ internal sealed class ApiModelBuilder
 		public TypeRef? Default { get; set; }
 	}
 
-	ErrorBodies Errors(string file, JsonObject document, string resource, JsonObject operation)
+	ErrorBodies Errors(string file, JsonObject document, string resource, string route, JsonObject operation)
 	{
 		var errors = new ErrorBodies(new(), new(), []);
 
@@ -209,7 +210,7 @@ internal sealed class ApiModelBuilder
 
 			var errorVersion = MediaTypeVersion.Read(error.MediaType);
 			var context = new NameContext(resource + "Error", errorVersion is null ? "" : MediaTypeVersion.MemberName(errorVersion),
-				"", [], "", Direction.Error, false, file, ErrorRoot: true) { Singulars = manifest.Singulars };
+				"", [], "", Direction.Error, false, file, ErrorRoot: true, Root: resource, Route: route) { Singulars = manifest.Singulars };
 			var type = shapes.Build(error.Schema, document, context);
 
 			if (code is { } c)
@@ -287,14 +288,9 @@ internal sealed class ApiModelBuilder
 	static ScalarRef ScalarOf(JsonObject? schema)
 		=> ShapeBuilder.Scalar(JsonText.String(schema, "type"), JsonText.String(schema, "format")) ?? ScalarRef.String;
 
-	PathNode? Place(string file, string label, string path, Dictionary<string, string> pathTypes)
+	/// <summary>The path's segments once the longest matching base path is removed.</summary>
+	string[] Routed(string path)
 	{
-		if (path.IndexOfAny(['?', '#']) >= 0)
-		{
-			diagnostics.Error($"{file}: {label} carries a query or fragment; that is not supported.");
-			return null;
-		}
-
 		var segments = path.Split('/', StringSplitOptions.RemoveEmptyEntries);
 		var skip = manifest.BasePaths
 			.Select(basePath => basePath.Split('/', StringSplitOptions.RemoveEmptyEntries))
@@ -303,13 +299,30 @@ internal sealed class ApiModelBuilder
 			.DefaultIfEmpty(0)
 			.Max();
 
-		if (segments.Length == skip)
+		return segments[skip..];
+	}
+
+	/// <summary>The route a name discriminator is taken from: segments in PascalCase, parameters as <c>Item</c>.</summary>
+	string RouteName(string path)
+		=> string.Join("/", Routed(path).Select(segment => IsParameter(segment) ? "Item" : Words.Pascal(segment)));
+
+	PathNode? Place(string file, string label, string path, Dictionary<string, string> pathTypes)
+	{
+		if (path.IndexOfAny(['?', '#']) >= 0)
+		{
+			diagnostics.Error($"{file}: {label} carries a query or fragment; that is not supported.");
+			return null;
+		}
+
+		var routed = Routed(path);
+
+		if (routed.Length == 0)
 		{
 			diagnostics.Error($"{file}: {label} sits at the root of the API once base paths are removed; that is not supported.");
 			return null;
 		}
 
-		if (segments.Skip(skip).FirstOrDefault(segment => segment.IndexOfAny(['{', '}']) >= 0 && !IsParameter(segment)) is { } mixed)
+		if (routed.FirstOrDefault(segment => segment.IndexOfAny(['{', '}']) >= 0 && !IsParameter(segment)) is { } mixed)
 		{
 			diagnostics.Error($"{file}: {label} has the segment {mixed}, which mixes text and parameters; that is not supported.");
 			return null;
@@ -317,7 +330,7 @@ internal sealed class ApiModelBuilder
 
 		var node = root;
 
-		foreach (var segment in segments.Skip(skip))
+		foreach (var segment in routed)
 		{
 			var isParameter = IsParameter(segment);
 			node = node.Child(segment, isParameter);
