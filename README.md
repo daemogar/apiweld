@@ -279,6 +279,9 @@ silently drops the value. The runtime's serializer options coerce instead:
   `3.0` and `1e2` read as `3` and `100`. A number that does not fit the property (a fraction or
   an out-of-range value for an integer, any number for a boolean) becomes `null` like unparseable
   text, so one odd value never fails a whole response.
+- A lone JSON object where a list is declared reads as a one-item list, at the top level of a
+  response as well as in a property. Some servers answer a single object where their description
+  promises an array. A scalar where a list is declared still fails, as before.
 - Property names stay case-sensitive, so a field the description misnames is not quietly matched
   to the wrong property; it lands in the model's `AdditionalData`, where it can be seen.
 

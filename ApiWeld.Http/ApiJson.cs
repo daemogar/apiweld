@@ -19,6 +19,7 @@ public static class ApiJson
 		};
 
 		options.Converters.Add(new TolerantStringConverter());
+		options.Converters.Add(new LoneObjectListConverterFactory());
 		Add(options, new TolerantInt32Converter());
 		Add(options, new TolerantInt64Converter());
 		Add(options, new TolerantDecimalConverter());
