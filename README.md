@@ -202,16 +202,22 @@ Types merge when their shape and direction are identical, across files as well a
 and a merged type takes its shortest candidate name, ties broken in ordinal order. A part merged
 from more than one description, reached at the same path in each, is named by that shared tail
 alone — `metadata` in every description becomes `MetadataResponse`, not one description's
-`{Root}{Version}MetadataResponse`. A whole body shared by several descriptions keeps the shortest
-name, since it has no tail to share. When
-different shapes want one name, the one a GET returns keeps it — or, when no GET returns
+`{Root}{Version}MetadataResponse`. A part merged within one description keeps the shortest
+name, even when it sits under two differently named components (an `errors` and a `problems`
+body sharing a `source` object give `ErrorsV2Source`). A whole body shared by several
+descriptions keeps the shortest name, since it has no tail to share.
+
+When different shapes want one name, the one a GET returns keeps it — or, when no GET returns
 any of them, the one reached from strictly the most descriptions — and the others gain their
 verb after the version (`ThingV1PostResponse`), with a warning. When the verb does not separate
-them, a third step does: shapes from different descriptions are prefixed with their
-description's root (`WidgetErrorsV2`), and shapes from one description gain the route segments
-the others do not share, after the verb (`ThingV1PostSearchRequest` for `POST /search/things`
-beside `POST /things`; a path parameter counts as `Item`). A clash that survives all three is
-an error naming the fix. A model may not take a name the generated navigation already has —
+them, a third step renames only the shapes the verb step renamed (every shape but a keeper,
+if it renamed none), so a type that holds the name as its own plain name keeps it. If the clash spans descriptions, each renamed shape is
+prefixed with its description's root (`WidgetErrorsV2`); renamed shapes that still share a
+root, or every renamed shape when the clash is within one description, then gain the route
+segments not shared by the shapes of the original clash, after the verb
+(`ThingV1PostSearchRequest` for `POST /search/things` beside `POST /things`; a path parameter
+counts as `Item`). Once a root prefix applies, only the original shapes from that root are
+compared. A clash that survives all three is an error naming the fix. A model may not take a name the generated navigation already has —
 `{Path}Node`, `{Path}{Version}Operations`, `{Path}{Version}{Verb}Query`, `{Client}Api` — nor the
 name of a type the generated code uses, such as `ApiTransport` or `JsonElement`; that is an error
 asking for a `names` entry.

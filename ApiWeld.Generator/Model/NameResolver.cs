@@ -34,22 +34,43 @@ internal static class NameResolver
 			foreach (var model in renamed)
 				model.Name = Words.Identifier(model.Chosen!.Qualified);
 
-			diagnostics.Warn($"{clash.Key}: {clash.Count()} different shapes want this name; kept by {KeptBy(keeper)}, renamed {string.Join(", ", renamed.Select(model => model.Name).Order(StringComparer.Ordinal))}.");
+			var changed = renamed.Where(model => model.Name != clash.Key).Select(model => model.Name).Order(StringComparer.Ordinal).ToList();
+
+			diagnostics.Warn($"{clash.Key}: {clash.Count()} different shapes want this name; kept by {KeptBy(keeper)}, "
+				+ (changed.Count > 0 ? $"renamed {string.Join(", ", changed)}." : "and no verb sets the others apart."));
 		}
 
 		foreach (var clash in Clashes(models))
 		{
 			var members = clash.ToList();
 			var byRoot = members.Select(model => model.Chosen!.Root).Distinct(StringComparer.Ordinal).Count() > 1;
-			var shared = members.SelectMany(model => origin.GetValueOrDefault(model) ?? [model]).Distinct().Select(Segments).Aggregate((left, right) => [.. left.Intersect(right, StringComparer.Ordinal)]);
-			var renamed = members.Where(model => !kept.Contains(model)).ToList();
+			var renamed = members.Where(origin.ContainsKey).ToList();
+			var routed = false;
+
+			if (renamed.Count == 0)
+				renamed = [.. members.Where(model => !kept.Contains(model))];
 
 			foreach (var model in renamed)
-				model.Name = Words.Identifier(byRoot
-					? model.Chosen!.Root + model.Name
-					: model.Chosen!.Discriminated(string.Concat(Segments(model).Where(segment => !shared.Contains(segment, StringComparer.Ordinal)))));
+			{
+				var root = model.Chosen!.Root;
 
-			diagnostics.Warn($"{clash.Key}: the verb did not separate {members.Count} shapes; renamed by {(byRoot ? "description" : "route")} to {string.Join(", ", renamed.Select(model => model.Name).Order(StringComparer.Ordinal))}.");
+				if (!byRoot)
+				{
+					model.Name = Words.Identifier(model.Chosen.Discriminated(Discriminator(model, Shared(members, origin, null))));
+					routed = true;
+				}
+				else if (renamed.Count(other => other.Chosen!.Root == root) > 1)
+				{
+					model.Name = Words.Identifier(root + model.Chosen.Discriminated(Discriminator(model, Shared(renamed.Where(other => other.Chosen!.Root == root), origin, root))));
+					routed = true;
+				}
+				else
+					model.Name = Words.Identifier(root + model.Name);
+			}
+
+			var by = byRoot ? routed ? "description and route" : "description" : "route";
+
+			diagnostics.Warn($"{clash.Key}: {members.Count} shapes were still clashing; renamed by {by} to {string.Join(", ", renamed.Select(model => model.Name).Order(StringComparer.Ordinal))}.");
 		}
 
 		foreach (var clash in Clashes(models))
@@ -64,14 +85,27 @@ internal static class NameResolver
 			diagnostics.Error($"{client}: a generated type would share the client's name; add a \"names\" entry.");
 	}
 
-	/// <summary>The path and suffix every candidate shares, when the candidates come from more than one base and the path is not empty.</summary>
+	/// <summary>The route segments shared by every original clash member of <paramref name="group"/>, limited to <paramref name="root"/> when given.</summary>
+	static string[] Shared(IEnumerable<ModelType> group, Dictionary<ModelType, List<ModelType>> origin, string? root)
+		=> group
+			.SelectMany(model => origin.GetValueOrDefault(model) ?? [model])
+			.Distinct()
+			.Where(model => root is null || model.Chosen!.Root == root)
+			.Select(Segments)
+			.Aggregate((left, right) => [.. left.Intersect(right, StringComparer.Ordinal)]);
+
+	/// <summary>The model's route segments that are not in <paramref name="shared"/>.</summary>
+	static string Discriminator(ModelType model, string[] shared)
+		=> string.Concat(Segments(model).Where(segment => !shared.Contains(segment, StringComparer.Ordinal)));
+
+	/// <summary>The path and suffix every candidate shares, when the candidates come from more than one description root and the path is not empty.</summary>
 	static string? SharedTail(ModelType model)
 	{
 		var first = model.Candidates[0];
 		var tail = first.Path + first.Suffix;
 
 		return first.Path.Length > 0
-			&& model.Candidates.Select(candidate => candidate.Base).Distinct(StringComparer.Ordinal).Count() > 1
+			&& model.Candidates.Select(candidate => candidate.Root).Distinct(StringComparer.Ordinal).Count() > 1
 			&& model.Candidates.All(candidate => candidate.Path + candidate.Suffix == tail)
 			? tail
 			: null;

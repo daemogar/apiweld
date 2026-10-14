@@ -111,8 +111,28 @@ public class NamingTests
 			Described("widgets", "width"), Described("gadgets", "width"), Described("sprockets", "height"), Described("cogs", "height"));
 
 		Assert.DoesNotContain(diagnostics, d => d.Severity == Severity.Error);
-		Assert.Equal(2, model.Models.Count(m => m.Name.EndsWith("DimensionsResponse", StringComparison.Ordinal)));
-		Assert.Single(model.Models, m => m.Name == "DimensionsResponse");
+		Assert.Equal(new[] { "DimensionsResponse", "GadgetV1GetDimensionsResponse" }, Names(model).Where(name => name.EndsWith("DimensionsResponse", StringComparison.Ordinal)));
+	}
+
+	[Fact]
+	public void Keeps_a_rooted_name_for_a_part_two_error_bodies_of_one_description_share()
+	{
+		const string paths = """
+			{ "/api/things": { "get": { "responses": {
+				"200": { "content": { "application/vnd.example.v1+json": { "schema": { "type": "string" } } } },
+				"400": { "content": { "application/vnd.example.errors.v2+json": { "schema": { "$ref": "#/components/schemas/errors" } } } },
+				"500": { "content": { "application/vnd.example.errors.v2+json": { "schema": { "$ref": "#/components/schemas/problems" } } } } } } } }
+			""";
+		const string source = """{ "type": "object", "properties": { "pointer": { "type": "string" } } }""";
+		const string schemas = $$"""
+			{ "errors": { "type": "object", "properties": { "code": { "type": "string" }, "source": {{source}} } },
+			  "problems": { "type": "object", "properties": { "title": { "type": "string" }, "source": {{source}} } } }
+			""";
+
+		var (model, diagnostics) = Descriptions.Resolve(Plain, ("things.json", Descriptions.Document(paths, schemas, version: "1")));
+
+		Assert.DoesNotContain(diagnostics, d => d.Severity == Severity.Error);
+		Assert.Equal(new[] { "ErrorsV2", "ErrorsV2Source", "ProblemsV2" }, Names(model));
 	}
 
 	[Fact]
@@ -230,6 +250,47 @@ public class NamingTests
 
 		Assert.Equal(new[] { "CogErrorsV2", "GadgetErrorsV2" }, forward);
 		Assert.Equal(forward, backward);
+	}
+
+	[Fact]
+	public void Settles_a_clash_across_descriptions_by_root_and_then_by_route()
+	{
+		var manifest = Plain with { Names = new Dictionary<string, string> { ["errors_a"] = "Errors", ["errors_b"] = "Errors" } };
+		static string Failing(string schema) => $$"""
+			{ "get": { "responses": {
+				"200": { "content": { "application/vnd.example.v1+json": { "schema": { "type": "string" } } } },
+				"400": { "content": { "application/vnd.example.errors.v2+json": { "schema": { "$ref": "#/components/schemas/{{schema}}" } } } } } } }
+			""";
+		const string widgetErrors = """
+			{ "errors_a": { "type": "object", "properties": { "code": { "type": "string" }, "a": { "type": "string" } } },
+			  "errors_b": { "type": "object", "properties": { "code": { "type": "string" }, "b": { "type": "string" } } } }
+			""";
+		const string gadgetErrors = """{ "errors": { "type": "object", "properties": { "code": { "type": "string" }, "c": { "type": "string" } } } }""";
+
+		var (model, diagnostics) = Descriptions.Resolve(manifest,
+			("widgets.json", Descriptions.Document($$"""{ "/api/widgets": {{Failing("errors_a")}}, "/api/widgets/{id}": {{Failing("errors_b")}} }""", widgetErrors, version: "1")),
+			("gadgets.json", Descriptions.Document($$"""{ "/api/gadgets": {{Failing("errors")}} }""", gadgetErrors, version: "1")));
+
+		Assert.DoesNotContain(diagnostics, d => d.Severity == Severity.Error);
+		Assert.Equal(new[] { "GadgetErrorsV2", "WidgetErrorsV2", "WidgetErrorsV2Item" }, Names(model));
+		Assert.DoesNotContain(diagnostics, d => d.Message.Contains("renamed ErrorsV2", StringComparison.Ordinal) || d.Message.Contains("verb did not", StringComparison.Ordinal));
+	}
+
+	[Fact]
+	public void Leaves_a_plain_name_alone_when_a_verb_renamed_shape_lands_on_it()
+	{
+		const string media = "application/vnd.example.v1+json";
+		const string first = """{ "type": "object", "properties": { "a": { "type": "string" }, "get": { "type": "object", "properties": { "z": { "type": "string" } } } } }""";
+		const string second = """{ "type": "object", "properties": { "b": { "type": "string" } } }""";
+
+		var (model, diagnostics) = Descriptions.Resolve(Plain, ("things.json", Descriptions.Document($$"""
+			{ "/api/things": { "get": {{Descriptions.Returns(media, first)}} },
+			  "/api/things/{id}": { "get": {{Descriptions.Returns(media, second)}} } }
+			""", version: "1")));
+
+		Assert.DoesNotContain(diagnostics, d => d.Severity == Severity.Error);
+		Assert.Equal("ThingV1GetResponse", model.Models.Single(m => m.Properties.Any(p => p.JsonName == "z")).Name);
+		Assert.Equal(new[] { "ThingV1GetItemResponse", "ThingV1GetResponse", "ThingV1Response" }, Names(model));
 	}
 
 	[Fact]
