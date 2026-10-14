@@ -156,6 +156,33 @@ public class NamingTests
 		Assert.Equal(new[] { "Errors", "ErrorsV2" }, Names(model));
 	}
 
+	static string FailingWith(string errorMedia) => $$"""
+		{ "responses": {
+			"200": { "content": { "application/vnd.example.v1+json": { "schema": { "type": "string" } } } },
+			"400": { "content": { "{{errorMedia}}": { "schema": { "$ref": "#/components/schemas/errors_2_0_0" } } } } } }
+		""";
+
+	const string VersionedErrors = """{ "errors_2_0_0": { "type": "object", "properties": { "code": { "type": "string" } } } }""";
+
+	[Fact]
+	public void Drops_a_schema_names_version_when_the_media_type_carries_one()
+	{
+		var (model, diagnostics) = Descriptions.Resolve(Plain, ("things.json", Descriptions.Document(
+			$$"""{ "/api/things": { "get": {{FailingWith("application/vnd.example.errors.v2+json")}} } }""", VersionedErrors, version: "1")));
+
+		Assert.Empty(diagnostics);
+		Assert.Equal(new[] { "ErrorsV2" }, Names(model));
+	}
+
+	[Fact]
+	public void Keeps_the_schema_name_whole_when_the_media_type_has_no_version()
+	{
+		var (model, _) = Descriptions.Resolve(Plain, ("things.json", Descriptions.Document(
+			$$"""{ "/api/things": { "get": {{FailingWith("application/json")}} } }""", VersionedErrors, version: "1")));
+
+		Assert.Equal(new[] { "Errors200" }, Names(model));
+	}
+
 	[Fact]
 	public void Refuses_a_type_named_like_the_client()
 	{

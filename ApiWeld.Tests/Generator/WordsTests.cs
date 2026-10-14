@@ -85,6 +85,19 @@ public class WordsTests
 		Assert.Equal(expected, Words.Camel(text));
 	}
 
+	[Theory]
+	[InlineData("errors_2_0_0", "errors")]
+	[InlineData("errors_v2", "errors")]
+	[InlineData("problem-details-1", "problem-details")]
+	[InlineData("errors", "errors")]
+	[InlineData("errors2", "errors2")]
+	[InlineData("v2", "v2")]
+	[InlineData("_2_0_0", "_2_0_0")]
+	public void Drops_a_trailing_version_suffix(string name, string expected)
+	{
+		Assert.Equal(expected, Words.WithoutVersionSuffix(name));
+	}
+
 	[Fact]
 	public void Numbers_a_name_until_it_is_unique()
 	{

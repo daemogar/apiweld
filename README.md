@@ -121,7 +121,7 @@ generated code calls the `ApiWeld.Http` runtime (see "The runtime").
   "output": "Generated",
   "basePaths": ["/api", "/query"],
   "paging": { "offset": "offset", "limit": "limit", "totalHeader": "X-Total-Count" },
-  "names": { "errors_1_0_0": "Errors" },
+  "names": { "widget-parts": "Part" },
   "singulars": { "octopi": "octopus" }
 }
 ```
@@ -194,7 +194,9 @@ A generated type is named `{Root}{Version}{Path}{Suffix}`:
   override.
 - **Suffix** — always `Response` or `Request`, so a name does not change when a description
   starts or stops sharing a shape between the two. Error bodies have no suffix; they are named
-  after their schema and the error media type's version, such as `ErrorsV2`.
+  after their schema and the error media type's version, such as `ErrorsV2`. A version already
+  spelled at the end of the schema's name (`errors_2_0_0`, `errors_v2`) is dropped when the media
+  type supplies one, so the version is not written twice.
 
 Types merge when their shape and direction are identical, across files as well as within one,
 and a merged type takes its shortest candidate name, ties broken in ordinal order. When
