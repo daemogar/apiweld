@@ -37,7 +37,7 @@ internal static class NameResolver
 			var changed = renamed.Where(model => model.Name != clash.Key).Select(model => model.Name).Order(StringComparer.Ordinal).ToList();
 
 			diagnostics.Warn($"{clash.Key}: {clash.Count()} different shapes want this name; kept by {KeptBy(keeper)}, "
-				+ (changed.Count > 0 ? $"renamed {string.Join(", ", changed)}." : "and no verb sets the others apart."));
+				+ (changed.Count > 0 ? $"renamed {string.Join(", ", changed)}." : "the others have no verb to add."));
 		}
 
 		foreach (var clash in Clashes(models))
