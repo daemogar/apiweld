@@ -48,7 +48,7 @@ internal sealed class ShapeBuilder(DiagnosticBag diagnostics, IReadOnlyDictionar
 			if (names.TryGetValue(component, out var renamed))
 				context = context.Rebase(renamed);
 			else if (context.ErrorRoot)
-				context = context.Rebase(Words.Pascal(component));
+				context = context.Rebase(Words.Pascal(context.Version.Length > 0 ? Words.WithoutVersionSuffix(component) : component));
 
 			resolving.Push(component);
 		}

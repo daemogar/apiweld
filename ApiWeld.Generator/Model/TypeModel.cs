@@ -35,8 +35,19 @@ internal sealed record ModelRef(ModelType Model) : TypeRef;
 /// <summary>One property of an object model.</summary>
 internal sealed record ModelProperty(string JsonName, TypeRef Type, string? Description, bool Required);
 
-/// <summary>A name a model could take: plain, and with its operation's verb inserted after the version.</summary>
-internal sealed record NameCandidate(string Plain, string Qualified, bool FromGet, string Source);
+/// <summary>A name a model could take, kept in parts so a clash can insert a discriminator; with the description root and route it came from.</summary>
+internal sealed record NameCandidate(string Base, string Version, string Verb, string Path, string Suffix,
+	bool FromGet, string Source, string Root, string Route)
+{
+	/// <summary>The name with no verb.</summary>
+	public string Plain => Base + Version + Path + Suffix;
+
+	/// <summary>The name with its operation's verb after the version.</summary>
+	public string Qualified => Base + Version + Verb + Path + Suffix;
+
+	/// <summary>The verb-qualified name with <paramref name="discriminator"/> after the verb.</summary>
+	public string Discriminated(string discriminator) => Base + Version + Verb + discriminator + Path + Suffix;
+}
 
 /// <summary>One generated type: a shape travelling in one direction, with every name it could take.</summary>
 internal sealed class ModelType(string shapeKey, Direction direction, ModelKind kind)

@@ -61,18 +61,78 @@ public class NamingTests
 	}
 
 	[Fact]
-	public void Breaks_a_length_tie_in_ordinal_order()
+	public void Names_a_part_shared_by_several_descriptions_by_the_tail_they_share()
 	{
 		const string dimensions = """{ "type": "object", "properties": { "width": { "type": "number" } } }""";
 		var widget = Descriptions.Returns("application/vnd.example.v2+json", $$"""{ "type": "object", "properties": { "name": { "type": "string" }, "dimensions": {{dimensions}} } }""");
 		var gadget = Descriptions.Returns("application/json", $$"""{ "type": "object", "properties": { "code": { "type": "string" }, "dimensions": {{dimensions}} } }""");
 
+		var (model, diagnostics) = Descriptions.Resolve(Plain,
+			("widgets.json", Descriptions.Document($$"""{ "/api/widgets": { "get": {{widget}} } }""", version: "2")),
+			("gadgets.json", Descriptions.Document($$"""{ "/api/gadgets": { "get": {{gadget}} } }""")));
+
+		Assert.DoesNotContain(diagnostics, d => d.Severity == Severity.Error);
+		Assert.Equal(new[] { "DimensionsResponse", "GadgetV0Response", "WidgetV2Response" }, Names(model));
+	}
+
+	[Fact]
+	public void Breaks_a_length_tie_in_ordinal_order()
+	{
+		const string size = """{ "type": "object", "properties": { "width": { "type": "number" } } }""";
+		var widget = Descriptions.Returns("application/vnd.example.v2+json", $$"""{ "type": "object", "properties": { "name": { "type": "string" }, "sizes": {{size}} } }""");
+		var gadget = Descriptions.Returns("application/json", $$"""{ "type": "object", "properties": { "code": { "type": "string" }, "areas": {{size}} } }""");
+
 		var (model, _) = Descriptions.Resolve(Plain,
 			("widgets.json", Descriptions.Document($$"""{ "/api/widgets": { "get": {{widget}} } }""", version: "2")),
 			("gadgets.json", Descriptions.Document($$"""{ "/api/gadgets": { "get": {{gadget}} } }""")));
 
-		Assert.Contains("GadgetV0DimensionsResponse", Names(model));
-		Assert.DoesNotContain("WidgetV2DimensionsResponse", Names(model));
+		Assert.Contains("GadgetV0AreasResponse", Names(model));
+		Assert.DoesNotContain("WidgetV2SizesResponse", Names(model));
+	}
+
+	[Fact]
+	public void Keeps_the_shortest_name_for_a_whole_body_shared_by_several_descriptions()
+	{
+		var (model, _) = Descriptions.Resolve(Plain,
+			("widgets.json", Descriptions.Document($$"""{ "/api/widgets": { "get": {{Descriptions.Returns("application/vnd.example.v2+json", Descriptions.Thing)}} } }""", version: "2")),
+			("gadgets.json", Descriptions.Document($$"""{ "/api/gadgets": { "get": {{Descriptions.Returns("application/json", Descriptions.Thing)}} } }""")));
+
+		Assert.Equal(new[] { "GadgetV0Response" }, Names(model));
+	}
+
+	[Fact]
+	public void Falls_back_when_two_shared_tails_collide()
+	{
+		static string With(string field) => $$"""{ "type": "object", "properties": { "code": { "type": "string" }, "dimensions": { "type": "object", "properties": { "{{field}}": { "type": "number" } } } } }""";
+		static (string, string) Described(string stem, string field)
+			=> (stem + ".json", Descriptions.Document($$"""{ "/api/{{stem}}": { "get": {{Descriptions.Returns("application/vnd.example.v1+json", With(field))}} } }""", version: "1"));
+
+		var (model, diagnostics) = Descriptions.Resolve(Plain,
+			Described("widgets", "width"), Described("gadgets", "width"), Described("sprockets", "height"), Described("cogs", "height"));
+
+		Assert.DoesNotContain(diagnostics, d => d.Severity == Severity.Error);
+		Assert.Equal(new[] { "DimensionsResponse", "GadgetV1GetDimensionsResponse" }, Names(model).Where(name => name.EndsWith("DimensionsResponse", StringComparison.Ordinal)));
+	}
+
+	[Fact]
+	public void Keeps_a_rooted_name_for_a_part_two_error_bodies_of_one_description_share()
+	{
+		const string paths = """
+			{ "/api/things": { "get": { "responses": {
+				"200": { "content": { "application/vnd.example.v1+json": { "schema": { "type": "string" } } } },
+				"400": { "content": { "application/vnd.example.errors.v2+json": { "schema": { "$ref": "#/components/schemas/errors" } } } },
+				"500": { "content": { "application/vnd.example.errors.v2+json": { "schema": { "$ref": "#/components/schemas/problems" } } } } } } } }
+			""";
+		const string source = """{ "type": "object", "properties": { "pointer": { "type": "string" } } }""";
+		const string schemas = $$"""
+			{ "errors": { "type": "object", "properties": { "code": { "type": "string" }, "source": {{source}} } },
+			  "problems": { "type": "object", "properties": { "title": { "type": "string" }, "source": {{source}} } } }
+			""";
+
+		var (model, diagnostics) = Descriptions.Resolve(Plain, ("things.json", Descriptions.Document(paths, schemas, version: "1")));
+
+		Assert.DoesNotContain(diagnostics, d => d.Severity == Severity.Error);
+		Assert.Equal(new[] { "ErrorsV2", "ErrorsV2Source", "ProblemsV2" }, Names(model));
 	}
 
 	[Fact]
@@ -108,18 +168,151 @@ public class NamingTests
 	}
 
 	[Fact]
-	public void Refuses_a_clash_the_verb_cannot_settle()
+	public void Settles_get_shapes_the_verb_cannot_by_the_route_segments_that_differ()
 	{
 		static string Shape(string field) => $$"""{ "type": "object", "properties": { "{{field}}": { "type": "string" } } }""";
 		const string media = "application/vnd.example.v1+json";
 
-		var (_, diagnostics) = Descriptions.Resolve(Plain, ("things.json", Descriptions.Document($$"""
+		var (model, diagnostics) = Descriptions.Resolve(Plain, ("things.json", Descriptions.Document($$"""
 			{ "/api/things": { "get": {{Descriptions.Returns(media, Shape("a"))}} },
 			  "/api/things/{id}": { "get": {{Descriptions.Returns(media, Shape("b"))}} },
 			  "/api/things/{id}/more": { "get": {{Descriptions.Returns(media, Shape("c"))}} } }
 			""", version: "1")));
 
-		Assert.Contains(diagnostics, d => d.Severity == Severity.Error && d.Message.StartsWith("ThingV1GetResponse:") && d.Message.Contains("\"names\""));
+		Assert.DoesNotContain(diagnostics, d => d.Severity == Severity.Error);
+		Assert.Equal(new[] { "ThingV1GetItemMoreResponse", "ThingV1GetItemResponse", "ThingV1Response" }, Names(model));
+	}
+
+	[Fact]
+	public void Settles_two_same_verb_bodies_on_different_routes()
+	{
+		static string Post(string field) => $$"""
+			{ "requestBody": { "content": { "application/vnd.example.v1+json": { "schema": { "type": "object", "properties": { "{{field}}": { "type": "string" } } } } } },
+			  "responses": { "200": { "content": { "application/vnd.example.v1+json": { "schema": {{Descriptions.Thing}} } } } } }
+			""";
+
+		var (model, diagnostics) = Descriptions.Resolve(Plain, ("things.json", Descriptions.Document($$"""
+			{ "/api/things": { "post": {{Post("name")}} },
+			  "/api/search/things": { "post": {{Post("query")}} } }
+			""", version: "1")));
+
+		Assert.DoesNotContain(diagnostics, d => d.Severity == Severity.Error);
+		Assert.Equal(new[] { "ThingV1PostRequest", "ThingV1PostSearchRequest", "ThingV1Response" }, Names(model));
+	}
+
+	static string Failing(string path) => $$"""
+		{ "{{path}}": { "get": { "responses": {
+			"200": { "content": { "application/vnd.example.v1+json": { "schema": { "type": "string" } } } },
+			"400": { "content": { "application/vnd.example.errors.v2+json": { "schema": { "$ref": "#/components/schemas/errors" } } } } } } } }
+		""";
+
+	const string CommonErrors = """{ "errors": { "type": "object", "properties": { "code": { "type": "string" }, "description": { "type": "string" } } } }""";
+
+	const string OtherErrors = """{ "errors": { "type": "object", "properties": { "code": { "type": "string" }, "details": { "type": "string" } } } }""";
+
+	[Fact]
+	public void Lets_the_error_shape_most_descriptions_share_keep_its_name()
+	{
+		var (model, diagnostics) = Descriptions.Resolve(Plain,
+			("gadgets.json", Descriptions.Document(Failing("/api/gadgets"), CommonErrors, version: "1")),
+			("widgets.json", Descriptions.Document(Failing("/api/widgets"), CommonErrors, version: "1")),
+			("sprockets.json", Descriptions.Document(Failing("/api/sprockets"), OtherErrors, version: "1")));
+
+		Assert.DoesNotContain(diagnostics, d => d.Severity == Severity.Error);
+		Assert.Equal(new[] { "ErrorsV2", "SprocketErrorsV2" }, Names(model));
+	}
+
+	[Fact]
+	public void Prefixes_every_error_shape_with_its_description_when_none_is_shared_more()
+	{
+		var (model, diagnostics) = Descriptions.Resolve(Plain,
+			("gadgets.json", Descriptions.Document(Failing("/api/gadgets"), CommonErrors, version: "1")),
+			("sprockets.json", Descriptions.Document(Failing("/api/sprockets"), OtherErrors, version: "1")));
+
+		Assert.DoesNotContain(diagnostics, d => d.Severity == Severity.Error);
+		Assert.Equal(new[] { "GadgetErrorsV2", "SprocketErrorsV2" }, Names(model));
+	}
+
+	[Fact]
+	public void Names_do_not_depend_on_description_order()
+	{
+		// Two descriptions per shape: no keeper, so both merged shapes are prefixed by a root.
+		(string, string)[] files =
+		[
+			("widgets.json", Descriptions.Document(Failing("/api/widgets"), CommonErrors, version: "1")),
+			("gadgets.json", Descriptions.Document(Failing("/api/gadgets"), CommonErrors, version: "1")),
+			("sprockets.json", Descriptions.Document(Failing("/api/sprockets"), OtherErrors, version: "1")),
+			("cogs.json", Descriptions.Document(Failing("/api/cogs"), OtherErrors, version: "1"))
+		];
+
+		var forward = Names(Descriptions.Resolve(Plain, files).Model);
+		var backward = Names(Descriptions.Resolve(Plain, [.. files.Reverse()]).Model);
+
+		Assert.Equal(new[] { "CogErrorsV2", "GadgetErrorsV2" }, forward);
+		Assert.Equal(forward, backward);
+	}
+
+	[Fact]
+	public void Settles_a_clash_across_descriptions_by_root_and_then_by_route()
+	{
+		var manifest = Plain with { Names = new Dictionary<string, string> { ["errors_a"] = "Errors", ["errors_b"] = "Errors" } };
+		static string Failing(string schema) => $$"""
+			{ "get": { "responses": {
+				"200": { "content": { "application/vnd.example.v1+json": { "schema": { "type": "string" } } } },
+				"400": { "content": { "application/vnd.example.errors.v2+json": { "schema": { "$ref": "#/components/schemas/{{schema}}" } } } } } } }
+			""";
+		const string widgetErrors = """
+			{ "errors_a": { "type": "object", "properties": { "code": { "type": "string" }, "a": { "type": "string" } } },
+			  "errors_b": { "type": "object", "properties": { "code": { "type": "string" }, "b": { "type": "string" } } } }
+			""";
+		const string gadgetErrors = """{ "errors": { "type": "object", "properties": { "code": { "type": "string" }, "c": { "type": "string" } } } }""";
+
+		var (model, diagnostics) = Descriptions.Resolve(manifest,
+			("widgets.json", Descriptions.Document($$"""{ "/api/widgets": {{Failing("errors_a")}}, "/api/widgets/{id}": {{Failing("errors_b")}} }""", widgetErrors, version: "1")),
+			("gadgets.json", Descriptions.Document($$"""{ "/api/gadgets": {{Failing("errors")}} }""", gadgetErrors, version: "1")));
+
+		Assert.DoesNotContain(diagnostics, d => d.Severity == Severity.Error);
+		Assert.Equal(new[] { "GadgetErrorsV2", "WidgetErrorsV2", "WidgetErrorsV2Item" }, Names(model));
+		Assert.DoesNotContain(diagnostics, d => d.Message.Contains("renamed ErrorsV2", StringComparison.Ordinal) || d.Message.Contains("verb did not", StringComparison.Ordinal));
+	}
+
+	[Fact]
+	public void Leaves_a_plain_name_alone_when_a_verb_renamed_shape_lands_on_it()
+	{
+		const string media = "application/vnd.example.v1+json";
+		const string first = """{ "type": "object", "properties": { "a": { "type": "string" }, "get": { "type": "object", "properties": { "z": { "type": "string" } } } } }""";
+		const string second = """{ "type": "object", "properties": { "b": { "type": "string" } } }""";
+
+		var (model, diagnostics) = Descriptions.Resolve(Plain, ("things.json", Descriptions.Document($$"""
+			{ "/api/things": { "get": {{Descriptions.Returns(media, first)}} },
+			  "/api/things/{id}": { "get": {{Descriptions.Returns(media, second)}} } }
+			""", version: "1")));
+
+		Assert.DoesNotContain(diagnostics, d => d.Severity == Severity.Error);
+		Assert.Equal("ThingV1GetResponse", model.Models.Single(m => m.Properties.Any(p => p.JsonName == "z")).Name);
+		Assert.Equal(new[] { "ThingV1GetItemResponse", "ThingV1GetResponse", "ThingV1Response" }, Names(model));
+	}
+
+	[Fact]
+	public void Refuses_a_clash_neither_the_verb_nor_the_route_can_settle()
+	{
+		var manifest = Plain with { Names = new Dictionary<string, string> { ["first"] = "Shared", ["second"] = "Shared", ["third"] = "Shared" } };
+		const string body = """
+			{ "type": "object", "properties": {
+				"a": { "$ref": "#/components/schemas/first" },
+				"b": { "$ref": "#/components/schemas/second" },
+				"c": { "$ref": "#/components/schemas/third" } } }
+			""";
+		const string schemas = """
+			{ "first": { "type": "object", "properties": { "x": { "type": "string" } } },
+			  "second": { "type": "object", "properties": { "y": { "type": "string" } } },
+			  "third": { "type": "object", "properties": { "z": { "type": "string" } } } }
+			""";
+
+		var (_, diagnostics) = Descriptions.Resolve(manifest, ("things.json", Descriptions.Document(
+			$$"""{ "/api/things": { "get": {{Descriptions.Returns("application/vnd.example.v1+json", body)}} } }""", schemas, version: "1")));
+
+		Assert.Contains(diagnostics, d => d.Severity == Severity.Error && d.Message.StartsWith("SharedV1GetResponse:") && d.Message.Contains("\"names\""));
 	}
 
 	[Fact]
@@ -154,6 +347,33 @@ public class NamingTests
 				"""{ "errors": { "type": "object", "properties": { "code": { "type": "string" }, "detail": { "type": "string" } } } }""")));
 
 		Assert.Equal(new[] { "Errors", "ErrorsV2" }, Names(model));
+	}
+
+	static string FailingWith(string errorMedia) => $$"""
+		{ "responses": {
+			"200": { "content": { "application/vnd.example.v1+json": { "schema": { "type": "string" } } } },
+			"400": { "content": { "{{errorMedia}}": { "schema": { "$ref": "#/components/schemas/errors_2_0_0" } } } } } }
+		""";
+
+	const string VersionedErrors = """{ "errors_2_0_0": { "type": "object", "properties": { "code": { "type": "string" } } } }""";
+
+	[Fact]
+	public void Drops_a_schema_names_version_when_the_media_type_carries_one()
+	{
+		var (model, diagnostics) = Descriptions.Resolve(Plain, ("things.json", Descriptions.Document(
+			$$"""{ "/api/things": { "get": {{FailingWith("application/vnd.example.errors.v2+json")}} } }""", VersionedErrors, version: "1")));
+
+		Assert.Empty(diagnostics);
+		Assert.Equal(new[] { "ErrorsV2" }, Names(model));
+	}
+
+	[Fact]
+	public void Keeps_the_schema_name_whole_when_the_media_type_has_no_version()
+	{
+		var (model, _) = Descriptions.Resolve(Plain, ("things.json", Descriptions.Document(
+			$$"""{ "/api/things": { "get": {{FailingWith("application/json")}} } }""", VersionedErrors, version: "1")));
+
+		Assert.Equal(new[] { "Errors200" }, Names(model));
 	}
 
 	[Fact]

@@ -33,6 +33,17 @@
 
 ### Fixed
 
+- `ApiWeld.Http`: a lone JSON object where a list is declared reads as a one-item list instead
+  of failing the response.
+- `ApiWeld.Generator`: a part shared by several descriptions at the same path is named by that
+  path (`MetadataResponse`) instead of after whichever description had the shortest name.
+- `ApiWeld.Generator`: different shapes that want one name and that the verb cannot separate —
+  two bodies of the same verb on different routes, or error bodies that differ between
+  descriptions — are now told apart by their route or their description instead of failing
+  generation; an error shape most descriptions share keeps the plain name.
+- `ApiWeld.Generator`: an error body whose schema name already ends in a version
+  (`errors_2_0_0`) is no longer named with the version twice (`Errors200V2`); the suffix is
+  dropped when the media type carries the version, giving `ErrorsV2`.
 - `ApiWeld.Http`: a whole number written as `3.0` or `1e2` now reads into an integer property,
   and a number that does not fit its property reads as `null` instead of failing the response.
 - `ApiWeld.Http`: a header the request cannot carry (an invalid name, a content header, or a

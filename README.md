@@ -121,7 +121,7 @@ generated code calls the `ApiWeld.Http` runtime (see "The runtime").
   "output": "Generated",
   "basePaths": ["/api", "/query"],
   "paging": { "offset": "offset", "limit": "limit", "totalHeader": "X-Total-Count" },
-  "names": { "errors_1_0_0": "Errors" },
+  "names": { "widget-parts": "Part" },
   "singulars": { "octopi": "octopus" }
 }
 ```
@@ -194,16 +194,36 @@ A generated type is named `{Root}{Version}{Path}{Suffix}`:
   override.
 - **Suffix** — always `Response` or `Request`, so a name does not change when a description
   starts or stops sharing a shape between the two. Error bodies have no suffix; they are named
-  after their schema and the error media type's version, such as `ErrorsV2`.
+  after their schema and the error media type's version, such as `ErrorsV2`. A version already
+  spelled at the end of the schema's name (`errors_2_0_0`, `errors_v2`) is dropped when the media
+  type supplies one, so the version is not written twice.
 
 Types merge when their shape and direction are identical, across files as well as within one,
-and a merged type takes its shortest candidate name, ties broken in ordinal order. When
-different shapes want one name, the one a GET returns keeps it and the others gain their verb
-after the version (`ThingV1PostResponse`), with a warning; a clash that survives that is an
-error naming the fix. A model may not take a name the generated navigation already has —
-`{Path}Node`, `{Path}{Version}Operations`, `{Path}{Version}{Verb}Query`, `{Client}Api` — nor the
-name of a type the generated code uses, such as `ApiTransport` or `JsonElement`; that is an error
-asking for a `names` entry.
+and a merged type takes its shortest candidate name, ties broken in ordinal order. A part merged
+from more than one description, reached at the same path in each, is named by that shared tail
+alone — `metadata` in every description becomes `MetadataResponse`, not one description's
+`{Root}{Version}MetadataResponse`. A part merged within one description keeps the shortest
+name, even when it sits under two differently named components (an `errors` and a `problems`
+body sharing a `source` object give `ErrorsV2Source`). A whole body shared by several
+descriptions keeps the shortest name, since it has no tail to share.
+
+When different shapes want one name, the one a GET returns keeps it — or, when no GET returns
+any of them, the one reached from strictly the most descriptions — and the others gain their
+verb after the version (`ThingV1PostResponse`), with a warning. When the verb does not separate
+them, a third step renames only the shapes the verb step renamed (every shape but a keeper,
+if it renamed none), so a type that holds the name as its own plain name keeps it. If the
+clash spans descriptions, each renamed shape is prefixed with its description's root
+(`WidgetErrorsV2`); renamed shapes that still share a root, or every renamed shape when the
+clash is within one description, then gain the route segments not shared by the shapes of the
+original clash, after the verb (`ThingV1PostSearchRequest` for `POST /search/things` beside
+`POST /things`; a path parameter counts as `Item`). Once a root prefix applies, only the
+original shapes from that root are compared. A clash that survives all three is an error
+naming the fix.
+
+A model may not take a name the generated navigation already has — `{Path}Node`,
+`{Path}{Version}Operations`, `{Path}{Version}{Verb}Query`, `{Client}Api` — nor the name of a
+type the generated code uses, such as `ApiTransport` or `JsonElement`; that is an error asking
+for a `names` entry.
 
 `names` in the manifest overrides a base name. A description's file stem replaces its Root; a
 component schema's name replaces the base of the type built from it, and the types nested under
@@ -268,6 +288,9 @@ silently drops the value. The runtime's serializer options coerce instead:
   `3.0` and `1e2` read as `3` and `100`. A number that does not fit the property (a fraction or
   an out-of-range value for an integer, any number for a boolean) becomes `null` like unparseable
   text, so one odd value never fails a whole response.
+- A lone JSON object where a list is declared reads as a one-item list, at the top level of a
+  response as well as in a property. Some servers answer a single object where their description
+  promises an array. A scalar where a list is declared still fails, as before.
 - Property names stay case-sensitive, so a field the description misnames is not quietly matched
   to the wrong property; it lands in the model's `AdditionalData`, where it can be seen.
 

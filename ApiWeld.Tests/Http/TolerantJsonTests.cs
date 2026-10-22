@@ -131,6 +131,53 @@ public class TolerantJsonTests
 		Assert.Equal("ultraviolet", unknown?.Value);
 		Assert.Equal("""{"color":"ultraviolet"}""", JsonSerializer.Serialize(new Sample { Color = unknown }, ApiJson.Options));
 	}
+
+	sealed class Holder
+	{
+		[JsonPropertyName("items")] public List<Sample>? Items { get; set; }
+		[JsonPropertyName("tags")] public List<string>? Tags { get; set; }
+	}
+
+	static Holder ReadHolder(string json) => JsonSerializer.Deserialize<Holder>(json, ApiJson.Options)!;
+
+	[Fact]
+	public void Reads_a_lone_object_where_a_list_is_declared_as_a_one_item_list()
+	{
+		Assert.Equal("only", Assert.Single(ReadHolder("""{ "items": { "text": "only" } }""").Items!).Text);
+	}
+
+	[Fact]
+	public void Reads_a_top_level_lone_object_as_a_one_item_list()
+	{
+		var list = JsonSerializer.Deserialize<List<Sample>>("""{ "text": "only" }""", ApiJson.Options)!;
+
+		Assert.Equal("only", Assert.Single(list).Text);
+	}
+
+	[Fact]
+	public void Still_reads_arrays_with_tolerant_items_and_nulls()
+	{
+		var holder = ReadHolder("""{ "items": [ { "text": "a" }, { "count": "2" } ], "tags": [ "x", 3 ] }""");
+
+		Assert.Equal(new[] { "a", null }, holder.Items!.Select(item => item.Text));
+		Assert.Equal(2, holder.Items![1].Count);
+		Assert.Equal(new[] { "x", "3" }, holder.Tags!);
+		Assert.Null(ReadHolder("""{ "items": null }""").Items);
+	}
+
+	[Fact]
+	public void Still_refuses_a_scalar_where_a_list_is_declared()
+	{
+		Assert.Throws<JsonException>(() => ReadHolder("""{ "tags": "x" }"""));
+	}
+
+	[Fact]
+	public void Writes_a_list_as_an_array()
+	{
+		var json = JsonSerializer.Serialize(new Holder { Items = [new Sample { Text = "a" }] }, ApiJson.Options);
+
+		Assert.Equal("""{"items":[{"text":"a"}]}""", json);
+	}
 }
 
 [JsonConverter(typeof(ExtensibleEnumConverter<Color>))]

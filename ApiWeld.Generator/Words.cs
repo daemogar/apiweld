@@ -8,6 +8,13 @@ internal static partial class Words
 	[GeneratedRegex(@"[A-Z]+(?![a-z])|[A-Z]?[a-z]+|\d+")]
 	private static partial Regex Word();
 
+	[GeneratedRegex(@"^(?<name>.*?[A-Za-z].*?)(?:[_-][vV]?\d+)+$")]
+	private static partial Regex VersionSuffix();
+
+	/// <summary><paramref name="name"/> without a trailing version such as <c>_2_0_0</c> or <c>_v2</c>; unchanged when nothing named would remain.</summary>
+	public static string WithoutVersionSuffix(string name)
+		=> VersionSuffix().Match(name) is { Success: true } match ? match.Groups["name"].Value : name;
+
 	static readonly HashSet<string> Keywords = new(StringComparer.Ordinal)
 	{
 		"abstract", "as", "base", "bool", "break", "byte", "case", "catch", "char", "checked", "class", "const",

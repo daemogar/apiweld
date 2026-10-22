@@ -3,7 +3,7 @@
 /// <summary>Where a schema sits, which is what its type's candidate name is built from.</summary>
 internal sealed record NameContext(
 	string Base, string Version, string Verb, IReadOnlyList<string> Path, string Suffix,
-	Direction Direction, bool FromGet, string Source, bool ErrorRoot = false)
+	Direction Direction, bool FromGet, string Source, bool ErrorRoot = false, string Root = "", string Route = "")
 {
 	/// <summary>The manifest's singulars, which array item names use before the built-in rules.</summary>
 	public IReadOnlyDictionary<string, string> Singulars { get; init; } = new Dictionary<string, string>();
@@ -20,10 +20,5 @@ internal sealed record NameContext(
 	public NameContext Rebase(string @base) => this with { Base = @base, Path = [], ErrorRoot = false };
 
 	/// <summary>The candidate name this context gives a type.</summary>
-	public NameCandidate Candidate()
-	{
-		var path = string.Concat(Path);
-
-		return new(Base + Version + path + Suffix, Base + Version + Verb + path + Suffix, FromGet, Source);
-	}
+	public NameCandidate Candidate() => new(Base, Version, Verb, string.Concat(Path), Suffix, FromGet, Source, Root, Route);
 }
