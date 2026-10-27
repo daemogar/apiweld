@@ -163,6 +163,54 @@ sealed class TolerantBooleanConverter : TolerantScalarConverter<bool>
 	protected override void WriteNative(Utf8JsonWriter writer, bool value) => writer.WriteBooleanValue(value);
 }
 
+/// <summary>Reads a date in any form <see cref="DateText"/> accepts, or the date part of a date-time as written.</summary>
+sealed class TolerantDateOnlyConverter : TolerantScalarConverter<DateOnly>
+{
+	protected override bool TryReadNative(ref Utf8JsonReader reader, out DateOnly value)
+	{
+		value = default;
+
+		return false;
+	}
+
+	protected override bool TryParse(string text, out DateOnly value) => DateText.TryParseDate(text, out value);
+
+	protected override void WriteNative(Utf8JsonWriter writer, DateOnly value)
+		=> writer.WriteStringValue(value.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture));
+}
+
+/// <summary>Reads a date-time in any form <see cref="DateText"/> accepts; one with no offset, or a bare date, is taken as UTC.</summary>
+sealed class TolerantDateTimeOffsetConverter : TolerantScalarConverter<DateTimeOffset>
+{
+	protected override bool TryReadNative(ref Utf8JsonReader reader, out DateTimeOffset value)
+	{
+		value = default;
+
+		return false;
+	}
+
+	protected override bool TryParse(string text, out DateTimeOffset value) => DateText.TryParseDateTime(text, out value);
+
+	protected override void WriteNative(Utf8JsonWriter writer, DateTimeOffset value) => writer.WriteStringValue(value);
+}
+
+/// <summary>Reads a time of day in any form <see cref="DateText"/> accepts, keeping the clock time of one with an offset.</summary>
+sealed class TolerantTimeOnlyConverter : TolerantScalarConverter<TimeOnly>
+{
+	public static string Format(TimeOnly value) => value.ToString("HH:mm:ss.FFFFFFF", CultureInfo.InvariantCulture);
+
+	protected override bool TryReadNative(ref Utf8JsonReader reader, out TimeOnly value)
+	{
+		value = default;
+
+		return false;
+	}
+
+	protected override bool TryParse(string text, out TimeOnly value) => DateText.TryParseTime(text, out value);
+
+	protected override void WriteNative(Utf8JsonWriter writer, TimeOnly value) => writer.WriteStringValue(Format(value));
+}
+
 /// <summary>Parses number text whose value is whole, whatever its form: <c>3.0</c> and <c>1e2</c> as well as <c>3</c>.</summary>
 static class WholeNumber
 {

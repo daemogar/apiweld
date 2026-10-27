@@ -16,6 +16,7 @@ internal sealed record ScalarRef(string Name, bool IsValueType) : TypeRef
 	public static readonly ScalarRef Guid = new("Guid", true);
 	public static readonly ScalarRef DateTimeOffset = new("DateTimeOffset", true);
 	public static readonly ScalarRef DateOnly = new("DateOnly", true);
+	public static readonly ScalarRef TimeOnly = new("TimeOnly", true);
 	public static readonly ScalarRef Int = new("int", true);
 	public static readonly ScalarRef Long = new("long", true);
 	public static readonly ScalarRef Decimal = new("decimal", true);

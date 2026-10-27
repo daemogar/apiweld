@@ -11,7 +11,7 @@ internal static class ReservedNames
 		"ApiClient", "ApiErrorFactory", "ApiOperation", "ApiQuery", "ApiRequestParameters", "ApiResponseException",
 		"ApiTransport", "IApiQuery", "CancellationToken", "DateOnly", "DateTimeOffset", "Guid", "HttpMethod",
 		"HttpRequestMessage", "JsonConverter", "JsonConverterAttribute", "JsonElement", "JsonExtensionData",
-		"JsonExtensionDataAttribute", "JsonPropertyName", "JsonPropertyNameAttribute", "Task"
+		"JsonExtensionDataAttribute", "JsonPropertyName", "JsonPropertyNameAttribute", "Task", "TimeOnly"
 	];
 
 	public static string Root(string client) => client + "Api";

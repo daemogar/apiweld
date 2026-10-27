@@ -55,6 +55,7 @@ public class ShapeTests
 	[InlineData("""{ "type": "string", "format": "uuid" }""", "Guid")]
 	[InlineData("""{ "type": "string", "format": "date-time" }""", "DateTimeOffset")]
 	[InlineData("""{ "type": "string", "format": "date" }""", "DateOnly")]
+	[InlineData("""{ "type": "string", "format": "time" }""", "TimeOnly")]
 	[InlineData("""{ "type": "integer" }""", "int")]
 	[InlineData("""{ "type": "integer", "format": "int64" }""", "long")]
 	[InlineData("""{ "type": "number" }""", "decimal")]

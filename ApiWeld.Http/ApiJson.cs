@@ -25,6 +25,9 @@ public static class ApiJson
 		Add(options, new TolerantDecimalConverter());
 		Add(options, new TolerantDoubleConverter());
 		Add(options, new TolerantBooleanConverter());
+		Add(options, new TolerantDateOnlyConverter());
+		Add(options, new TolerantDateTimeOffsetConverter());
+		Add(options, new TolerantTimeOnlyConverter());
 		options.MakeReadOnly(populateMissingResolver: true);
 
 		return options;

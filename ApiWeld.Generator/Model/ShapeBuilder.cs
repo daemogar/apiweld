@@ -22,6 +22,7 @@ internal sealed class ShapeBuilder(DiagnosticBag diagnostics, IReadOnlyDictionar
 			"uuid" => ScalarRef.Guid,
 			"date-time" => ScalarRef.DateTimeOffset,
 			"date" => ScalarRef.DateOnly,
+			"time" => ScalarRef.TimeOnly,
 			_ => ScalarRef.String
 		},
 		"integer" => format == "int64" ? ScalarRef.Long : ScalarRef.Int,

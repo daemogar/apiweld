@@ -301,6 +301,15 @@ silently drops the value. The runtime's serializer options coerce instead:
   `3.0` and `1e2` read as `3` and `100`. A number that does not fit the property (a fraction or
   an out-of-range value for an integer, any number for a boolean) becomes `null` like unparseable
   text, so one odd value never fails a whole response.
+- Dates and times are read leniently, and text that still does not parse becomes `null` the same
+  way. A date may be ISO 8601 extended (`2026-10-27`) or basic (`20261027`), or use slashes as
+  `yyyy/M/d` or month first as `M/d/yyyy`; a day-first slash date such as `27/10/2026` is
+  rejected rather than guessed. A time may follow after `T` or a space, as `H:mm[:ss]` or
+  `HHmm[ss]`, with a fraction of a second after a point or a comma and an optional offset (`Z`,
+  `±HH`, `±HHmm` or `±HH:mm`). A `date` (`DateOnly`) takes the date part as written. A
+  `date-time` (`DateTimeOffset`) with no offset is read as UTC, and a bare date as midnight UTC.
+  A `time` (`TimeOnly`) is the time part alone, and keeps its clock time when it carries an
+  offset. Fractions finer than a tick are dropped. Each is written back as ISO 8601 extended.
 - A lone JSON object where a list is declared reads as a one-item list, at the top level of a
   response as well as in a property. Some servers answer a single object where their description
   promises an array. A scalar where a list is declared still fails, as before.
