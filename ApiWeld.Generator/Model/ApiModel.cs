@@ -41,6 +41,9 @@ internal sealed class PathNode(string segment, bool isParameter, PathNode? paren
 /// <summary>A query or header parameter an operation's query object carries.</summary>
 internal sealed record QueryParameter(string Name, string In, TypeRef Type, string? Description, bool Required);
 
+/// <summary>Which paging parameters a paged operation sends, and its described default and maximum limit.</summary>
+internal sealed record PagedModel(bool Offset, bool Limit, int? DefaultLimit, int? MaximumLimit = null, bool Undeclared = false);
+
 /// <summary>One operation at one version on one path node.</summary>
 internal sealed class OperationModel
 {
@@ -64,7 +67,9 @@ internal sealed class OperationModel
 
 	public TypeRef? Request { get; init; }
 
-	public bool IsPaged { get; init; }
+	public PagedModel? Paging { get; init; }
+
+	public bool IsPaged => Paging is not null;
 
 	public List<QueryParameter> Parameters { get; init; } = [];
 

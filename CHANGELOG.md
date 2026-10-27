@@ -74,3 +74,9 @@
   at a drive root.
 - `ApiWeld.Cli`: `apiweld generate` reports a manifest it cannot read and exits 1, instead of
   stopping with an exception.
+- `ApiWeld.Http` and `ApiWeld.Generator`: a paged list whose server sends no total-count header
+  is walked to the end instead of stopping after page one. A page is full at the caller's limit,
+  else the description's `default` for it, else 100, capped by a described `maximum`; the walk
+  continues while pages come back full. A page longer than a limit the caller sent is the whole
+  answer. Every `GET` that returns a list is now paged, whichever of offset and limit it declares,
+  if either. See the README's "Page walking".

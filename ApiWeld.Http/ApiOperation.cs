@@ -1,7 +1,18 @@
 ﻿namespace ApiWeld.Http;
 
-/// <summary>The query and header names a paged operation uses.</summary>
-public sealed record ApiPaging(string Offset, string Limit, string TotalHeader);
+/// <summary>The query and header names a paged operation uses; an operation may declare only one of offset and limit.</summary>
+/// <remarks>See README.md, "Page walking".</remarks>
+public sealed record ApiPaging(string? Offset, string? Limit, string TotalHeader)
+{
+	/// <summary>The page size assumed when the caller sets no limit: the description's default, or 100.</summary>
+	public int DefaultLimit { get; init; } = 100;
+
+	/// <summary>The description's largest allowed limit, or null when it gives none.</summary>
+	public int? MaximumLimit { get; init; }
+
+	/// <summary>True when the description declares neither parameter, so the names are only the manifest's convention.</summary>
+	public bool Undeclared { get; init; }
+}
 
 /// <summary>One generated operation, described as data.</summary>
 public sealed record ApiOperation(HttpMethod Method, string Template)

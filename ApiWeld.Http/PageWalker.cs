@@ -13,9 +13,11 @@ internal delegate Task<PageFetch<T>> PageFetcher<T>(int offset, int? limit, Canc
 /// <remarks>See README.md, "Page walking".</remarks>
 internal static class PageWalker
 {
-	public static async IAsyncEnumerable<T> WalkAsync<T>(ApiOperation operation, PageFetcher<T> fetch, int narrowing,
+	/// <summary>Walks every page, sending <paramref name="limit"/> if set and expecting <paramref name="full"/> rows a page, or what the first page holds.</summary>
+	public static async IAsyncEnumerable<T> WalkAsync<T>(ApiOperation operation, PageFetcher<T> fetch, int? limit, int? full, int narrowing,
 		[EnumeratorCancellation] CancellationToken cancellationToken)
 	{
+		var paging = operation.Paging!;
 		var failures = new List<PageFailure>();
 		var offset = 0;
 		int? size = null;
@@ -25,14 +27,15 @@ internal static class PageWalker
 
 		while (walking)
 		{
-			var step = await StepAsync(fetch, offset, size, total, narrowing, failures, cancellationToken).ConfigureAwait(false);
+			var step = await StepAsync(fetch, offset, limit, size, total, narrowing, paging.Limit is not null, failures, cancellationToken).ConfigureAwait(false);
 
 			if (step.Page is { } page)
 			{
 				if (page.Items.Count == 0)
 					break;
 
-				await GuardAsync(page, previous, offset, null, fetch, cancellationToken).ConfigureAwait(false);
+				if (await GuardAsync(page, previous, offset, limit, fetch, paging.Undeclared, cancellationToken).ConfigureAwait(false))
+					break;
 
 				foreach (var item in page.Items)
 					yield return item;
@@ -42,7 +45,13 @@ internal static class PageWalker
 				total = page.Total;
 				offset += page.Items.Count;
 				previous = page.Body;
-				walking = page.Total is not null;
+				full = Grown(full, limit, page.Items.Count);
+
+				// A page longer than the limit sent means the server ignored it and does not page; it is the whole answer.
+				var ignored = page.Items.Count > limit;
+
+				// Without a total, a short page is the end.
+				walking = !ignored && (total is { } count ? offset < count : page.Items.Count == full);
 			}
 			else
 			{
@@ -52,14 +61,16 @@ internal static class PageWalker
 				// The window is stepped over whole: its good records are in hand and its bad ones are reported.
 				offset += step.Span;
 				previous = null;
+				walking = total is not { } count || offset < count;
 			}
-
-			walking = walking && total is { } count && offset < count;
 		}
 
 		if (failures.Count > 0)
 			throw new ApiPagingException(operation, failures);
 	}
+
+	/// <summary>The full-page size after a page: the first page sets it, and with no limit sent a longer page shows the server's is larger.</summary>
+	public static int Grown(int? full, int? limit, int count) => full is { } known && (limit is not null || count <= known) ? known : count;
 
 	/// <summary>One turn of the walk: a page, or the rows recovered from a failed window and how many records it covered.</summary>
 	readonly record struct Step<T>(PageFetch<T>? Page, List<T> Rows, int Span);
@@ -68,20 +79,24 @@ internal static class PageWalker
 	readonly record struct Attempt<T>(List<T>? Rows, Exception? Error, bool Ignored);
 
 	/// <summary>The next page; or, when a failure can be narrowed, the records of that window the server will still answer for.</summary>
-	static async Task<Step<T>> StepAsync<T>(PageFetcher<T> fetch, int offset, int? size, int? total, int narrowing,
+	static async Task<Step<T>> StepAsync<T>(PageFetcher<T> fetch, int offset, int? limit, int? size, int? total, int narrowing, bool splittable,
 		List<PageFailure> failures, CancellationToken cancellationToken)
 	{
 		try
 		{
-			return new(await fetch(offset, null, cancellationToken).ConfigureAwait(false), [], 0);
+			return new(await fetch(offset, limit, cancellationToken).ConfigureAwait(false), [], 0);
 		}
-		// Narrowing needs a window to narrow: both the server's page size and the total are only known past the first page.
-		catch (Exception error) when (Narrowable(error) && narrowing > 0 && size is { } window && total is { } count)
+		// Narrowing needs a window to narrow, the size of the page before; so it only starts past the first page.
+		catch (Exception error) when (Narrowable(error) && narrowing > 0 && size is { } window)
 		{
-			var span = Math.Clamp(count - offset, 1, window);
+			var span = total is { } count ? Math.Clamp(count - offset, 1, window) : window;
 			var rows = new List<T>();
 
-			await NarrowAsync(fetch, offset, span, error, rows, failures, new Budget(narrowing), cancellationToken).ConfigureAwait(false);
+			// With no limit parameter, half a window cannot be asked for, so the window is reported whole.
+			if (splittable)
+				await NarrowAsync(fetch, offset, span, error, rows, failures, new Budget(narrowing), cancellationToken).ConfigureAwait(false);
+			else
+				failures.Add(new(offset, span, error));
 
 			return new(null, rows, span);
 		}
@@ -159,17 +174,24 @@ internal static class PageWalker
 		}
 	}
 
-	/// <summary>Throws when a page repeats the one before it and the page one row later repeats it too.</summary>
-	public static async Task GuardAsync<T>(PageFetch<T> page, string? previous, int offset, int? limit,
-		PageFetcher<T> fetch, CancellationToken cancellationToken)
+	/// <summary>
+	/// Checks for a server ignoring the offset: a page that repeats the one before it, as does the page one row later.
+	/// Throws when it is; returns true instead when the offset was never declared, since the pages before were then everything.
+	/// </summary>
+	public static async Task<bool> GuardAsync<T>(PageFetch<T> page, string? previous, int offset, int? limit,
+		PageFetcher<T> fetch, bool undeclared, CancellationToken cancellationToken)
 	{
 		if (previous is null || page.Items.Count == 0 || page.Body != previous)
-			return;
+			return false;
 
 		// Rows can legitimately repeat; a server that honors the offset still answers a shifted request differently.
 		var shifted = await fetch(offset + 1, limit, cancellationToken).ConfigureAwait(false);
 
-		if (shifted.Body == page.Body)
-			throw new InvalidOperationException($"The page at offset {offset} repeats the page before it, and so does the page at offset {offset + 1}; the server appears to ignore the offset parameter.");
+		if (shifted.Body != page.Body)
+			return false;
+
+		return undeclared
+			? true
+			: throw new InvalidOperationException($"The page at offset {offset} repeats the page before it, and so does the page at offset {offset + 1}; the server appears to ignore the offset parameter.");
 	}
 }

@@ -281,21 +281,67 @@ public class ApiModelTests
 		var operation = Only(model, "V0", "Get", "things");
 
 		Assert.True(operation.IsPaged);
+		Assert.Equal(new PagedModel(Offset: true, Limit: true, DefaultLimit: null), operation.Paging);
 		Assert.Equal(new[] { "limit", "criteria" }, operation.Parameters.Select(p => p.Name));
 	}
 
 	[Fact]
-	public void Does_not_page_without_both_parameters_a_list_and_a_get()
+	public void Pages_a_list_with_only_one_of_offset_and_limit()
 	{
+		const string offsetOnly = """[ { "name": "offset", "in": "query", "schema": { "type": "integer" } } ]""";
 		const string limitOnly = """[ { "name": "limit", "in": "query", "schema": { "type": "integer" } } ]""";
 
 		var (model, _) = Descriptions.Build(Plain, ("things.json", Descriptions.Document($$"""
-			{ "/api/a": { "get": {{Descriptions.Returns("application/json", Descriptions.Things, limitOnly)}} },
-			  "/api/b": { "get": {{Descriptions.Returns("application/json", Descriptions.Thing, Paging)}} },
+			{ "/api/a": { "get": {{Descriptions.Returns("application/json", Descriptions.Things, offsetOnly)}} },
+			  "/api/b": { "get": {{Descriptions.Returns("application/json", Descriptions.Things, limitOnly)}} } }
+			""")));
+
+		var a = Only(model, "V0", "Get", "a");
+		var b = Only(model, "V0", "Get", "b");
+
+		Assert.Equal(new PagedModel(Offset: true, Limit: false, DefaultLimit: null), a.Paging);
+		Assert.Empty(a.Parameters);
+		Assert.Equal(new PagedModel(Offset: false, Limit: true, DefaultLimit: null), b.Paging);
+		Assert.Equal(new[] { "limit" }, b.Parameters.Select(p => p.Name));
+	}
+
+	[Fact]
+	public void Reads_the_described_default_and_maximum_limit()
+	{
+		const string paging = """
+			[ { "name": "offset", "in": "query", "schema": { "type": "integer" } },
+			  { "name": "limit", "in": "query", "schema": { "type": "integer", "default": 25, "maximum": 50 } } ]
+			""";
+
+		var (model, _) = Descriptions.Build(Plain, ("things.json", Descriptions.Document(
+			$$"""{ "/api/things": { "get": {{Descriptions.Returns("application/json", Descriptions.Things, paging)}} } }""")));
+
+		Assert.Equal(new PagedModel(Offset: true, Limit: true, DefaultLimit: 25, MaximumLimit: 50), Only(model, "V0", "Get", "things").Paging);
+	}
+
+	[Fact]
+	public void Pages_a_list_that_declares_neither_parameter_by_the_manifests_names()
+	{
+		const string criteriaOnly = """[ { "name": "criteria", "in": "query", "schema": { "type": "string" } } ]""";
+
+		var (model, _) = Descriptions.Build(Plain, ("things.json", Descriptions.Document($$"""
+			{ "/api/things": { "get": {{Descriptions.Returns("application/json", Descriptions.Things, criteriaOnly)}} } }
+			""")));
+
+		var operation = Only(model, "V0", "Get", "things");
+
+		Assert.Equal(new PagedModel(Offset: true, Limit: true, DefaultLimit: null, Undeclared: true), operation.Paging);
+		Assert.Equal(new[] { "criteria" }, operation.Parameters.Select(p => p.Name));
+	}
+
+	[Fact]
+	public void Does_not_page_a_single_object_or_a_verb_other_than_get()
+	{
+		var (model, _) = Descriptions.Build(Plain, ("things.json", Descriptions.Document($$"""
+			{ "/api/b": { "get": {{Descriptions.Returns("application/json", Descriptions.Thing, Paging)}} },
 			  "/api/c": { "post": {{Descriptions.Returns("application/json", Descriptions.Things, Paging)}} } }
 			""")));
 
-		Assert.False(Only(model, "V0", "Get", "a").IsPaged);
 		Assert.False(Only(model, "V0", "Get", "b").IsPaged);
 		Assert.False(Only(model, "V0", "Post", "c").IsPaged);
 	}
