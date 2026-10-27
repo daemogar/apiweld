@@ -40,6 +40,7 @@
   date-time with no offset (or a bare date) is read as UTC, a time keeps its clock time when it
   carries an offset, and a value that still does not parse reads as `null` instead of failing
   the response. See the README's "Tolerant JSON".
+- `ApiWeld.Generator`: a string with format `time` maps to `TimeOnly` rather than `string`.
 - `ApiWeld.Generator`: a part shared by several descriptions at the same path is named by that
   path (`MetadataResponse`) instead of after whichever description had the shortest name.
 - `ApiWeld.Generator`: different shapes that want one name and that the verb cannot separate —
