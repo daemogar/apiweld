@@ -47,7 +47,7 @@ public class NamingTests
 	}
 
 	[Fact]
-	public void Merges_identical_shapes_across_files_under_the_shortest_name()
+	public void Splits_a_shape_each_description_reaches_at_a_different_path()
 	{
 		const string place = """{ "type": "object", "properties": { "country": { "type": "string" } } }""";
 		var address = $$"""{ "type": "object", "properties": { "place": {{place}} } }""";
@@ -57,7 +57,20 @@ public class NamingTests
 			("persons.json", Descriptions.Document($$"""{ "/api/persons": { "get": {{Descriptions.Returns("application/vnd.example.v12.6.0+json", List(person))}} } }""", version: "12.6.0")),
 			("addresses.json", Descriptions.Document($$"""{ "/api/addresses": { "get": {{Descriptions.Returns("application/vnd.example.v11.1.0+json", List(address))}} } }""", version: "11.1.0")));
 
-		Assert.Equal(new[] { "AddressV11_1PlaceResponse", "AddressV11_1Response", "PersonV12_6Response" }, Names(model));
+		Assert.Equal(new[] { "AddressV11_1PlaceResponse", "AddressV11_1Response", "PersonV12_6AddressPlaceResponse", "PersonV12_6AddressResponse", "PersonV12_6Response" }, Names(model));
+	}
+
+	[Fact]
+	public void Keeps_a_descriptions_names_when_another_description_with_the_same_shape_is_added()
+	{
+		var gadgets = ("gadgets.json", Descriptions.Document($$"""{ "/api/gadgets": { "get": {{Descriptions.Returns("application/json", Descriptions.Thing)}} } }"""));
+		var cogs = ("cogs.json", Descriptions.Document($$"""{ "/api/cogs": { "get": {{Descriptions.Returns("application/json", Descriptions.Thing)}} } }"""));
+
+		var alone = Names(Descriptions.Resolve(Plain, gadgets).Model);
+		var together = Names(Descriptions.Resolve(Plain, gadgets, cogs).Model);
+
+		Assert.Equal(new[] { "GadgetV0Response" }, alone);
+		Assert.Equal(new[] { "CogV0Response", "GadgetV0Response" }, together);
 	}
 
 	[Fact]
@@ -76,28 +89,41 @@ public class NamingTests
 	}
 
 	[Fact]
-	public void Breaks_a_length_tie_in_ordinal_order()
+	public void Splits_a_shared_part_holding_a_shape_one_description_also_reaches_elsewhere()
 	{
-		const string size = """{ "type": "object", "properties": { "width": { "type": "number" } } }""";
-		var widget = Descriptions.Returns("application/vnd.example.v2+json", $$"""{ "type": "object", "properties": { "name": { "type": "string" }, "sizes": {{size}} } }""");
-		var gadget = Descriptions.Returns("application/json", $$"""{ "type": "object", "properties": { "code": { "type": "string" }, "areas": {{size}} } }""");
+		const string unit = """{ "type": "object", "properties": { "label": { "type": "string" } } }""";
+		const string dimensions = $$"""{ "type": "object", "properties": { "unit": {{unit}} } }""";
+		var widget = Descriptions.Returns("application/vnd.example.v2+json", $$"""{ "type": "object", "properties": { "name": { "type": "string" }, "dimensions": {{dimensions}} } }""");
+		var gadget = Descriptions.Returns("application/json", $$"""{ "type": "object", "properties": { "code": { "type": "string" }, "dimensions": {{dimensions}}, "primary": {{unit}} } }""");
 
-		var (model, _) = Descriptions.Resolve(Plain,
+		var (model, diagnostics) = Descriptions.Resolve(Plain,
 			("widgets.json", Descriptions.Document($$"""{ "/api/widgets": { "get": {{widget}} } }""", version: "2")),
 			("gadgets.json", Descriptions.Document($$"""{ "/api/gadgets": { "get": {{gadget}} } }""")));
 
-		Assert.Contains("GadgetV0AreasResponse", Names(model));
-		Assert.DoesNotContain("WidgetV2SizesResponse", Names(model));
+		Assert.DoesNotContain(diagnostics, d => d.Severity == Severity.Error);
+		Assert.Equal(new[] { "GadgetV0DimensionsResponse", "GadgetV0PrimaryResponse", "GadgetV0Response", "WidgetV2DimensionsResponse", "WidgetV2DimensionsUnitResponse", "WidgetV2Response" }, Names(model));
 	}
 
 	[Fact]
-	public void Keeps_the_shortest_name_for_a_whole_body_shared_by_several_descriptions()
+	public void Breaks_a_length_tie_in_ordinal_order()
+	{
+		const string size = """{ "type": "object", "properties": { "width": { "type": "number" } } }""";
+		var gadget = Descriptions.Returns("application/json", $$"""{ "type": "object", "properties": { "code": { "type": "string" }, "sizes": {{size}}, "areas": {{size}} } }""");
+
+		var (model, _) = Descriptions.Resolve(Plain, ("gadgets.json", Descriptions.Document($$"""{ "/api/gadgets": { "get": {{gadget}} } }""")));
+
+		Assert.Contains("GadgetV0AreasResponse", Names(model));
+		Assert.DoesNotContain("GadgetV0SizesResponse", Names(model));
+	}
+
+	[Fact]
+	public void Gives_each_description_its_own_type_for_a_whole_body_they_share()
 	{
 		var (model, _) = Descriptions.Resolve(Plain,
 			("widgets.json", Descriptions.Document($$"""{ "/api/widgets": { "get": {{Descriptions.Returns("application/vnd.example.v2+json", Descriptions.Thing)}} } }""", version: "2")),
 			("gadgets.json", Descriptions.Document($$"""{ "/api/gadgets": { "get": {{Descriptions.Returns("application/json", Descriptions.Thing)}} } }""")));
 
-		Assert.Equal(new[] { "GadgetV0Response" }, Names(model));
+		Assert.Equal(new[] { "GadgetV0Response", "WidgetV2Response" }, Names(model));
 	}
 
 	[Fact]

@@ -99,7 +99,7 @@ internal static class NameResolver
 		=> string.Concat(Segments(model).Where(segment => !shared.Contains(segment, StringComparer.Ordinal)));
 
 	/// <summary>The path and suffix every candidate shares, when the candidates come from more than one description root and the path is not empty.</summary>
-	static string? SharedTail(ModelType model)
+	internal static string? SharedTail(ModelType model)
 	{
 		var first = model.Candidates[0];
 		var tail = first.Path + first.Suffix;

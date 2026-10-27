@@ -18,24 +18,55 @@ internal sealed class ApiModelBuilder
 	readonly ShapeBuilder shapes;
 	readonly PathNode root = new("", false, null);
 
-	ApiModelBuilder(Manifest manifest, DiagnosticBag diagnostics)
+	ApiModelBuilder(Manifest manifest, DiagnosticBag diagnostics, IReadOnlySet<string>? shared)
 	{
 		this.manifest = manifest;
 		this.diagnostics = diagnostics;
-		shapes = new ShapeBuilder(diagnostics, manifest.Names);
+		shapes = new ShapeBuilder(diagnostics, manifest.Names, shared);
 	}
 
+	/// <summary>Builds twice: once merging every shape, to learn which shapes merge across descriptions, then for real.</summary>
 	public static ApiModel Build(Manifest manifest, IEnumerable<DescriptionSource> sources, DiagnosticBag diagnostics)
 	{
-		var builder = new ApiModelBuilder(manifest, diagnostics);
+		var ordered = sources.OrderBy(source => source.FileName, StringComparer.Ordinal).ToList();
+		var builder = Pass(manifest, ordered, diagnostics, Shared(Pass(manifest, ordered, new DiagnosticBag(), null).shapes.Models));
 
-		foreach (var source in sources.OrderBy(source => source.FileName, StringComparer.Ordinal))
+		return new(builder.root, [.. builder.shapes.Models]);
+	}
+
+	static ApiModelBuilder Pass(Manifest manifest, List<DescriptionSource> sources, DiagnosticBag diagnostics, IReadOnlySet<string>? shared)
+	{
+		var builder = new ApiModelBuilder(manifest, diagnostics, shared);
+
+		foreach (var source in sources)
 			builder.Add(source);
 
 		builder.Check();
 
-		return new(builder.root, [.. builder.shapes.Models]);
+		return builder;
 	}
+
+	/// <summary>The merge keys of shapes that merge across descriptions: error bodies, and shapes every description reaches at the same tail whose nested shapes merge too.</summary>
+	/// <remarks>See README.md, "Names".</remarks>
+	static HashSet<string> Shared(IEnumerable<ModelType> models)
+	{
+		var shared = models.Where(model => model.Direction == Direction.Error || NameResolver.SharedTail(model) is not null).ToHashSet();
+
+		while (shared.RemoveWhere(model => model.Properties.Any(property => Nested(property.Type) is { } nested && !shared.Contains(nested))) > 0)
+		{
+		}
+
+		return [.. shared.Select(model => ShapeBuilder.MergeKey(model.Direction, model.ShapeKey))];
+	}
+
+	/// <summary>The model a property's type holds, through any lists and maps.</summary>
+	static ModelType? Nested(TypeRef type) => type switch
+	{
+		ModelRef model => model.Model,
+		ListRef list => Nested(list.Item),
+		MapRef map => Nested(map.Value),
+		_ => null
+	};
 
 	void Add(DescriptionSource source)
 	{
