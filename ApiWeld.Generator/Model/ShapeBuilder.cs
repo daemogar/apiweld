@@ -3,8 +3,11 @@ using System.Text.Json.Nodes;
 
 namespace ApiWeld.Generator.Model;
 
-/// <summary>Turns schemas into types, merging identical shapes that travel in the same direction.</summary>
-internal sealed class ShapeBuilder(DiagnosticBag diagnostics, IReadOnlyDictionary<string, string> names)
+/// <summary>
+/// Turns schemas into types, merging identical shapes that travel in the same direction: across descriptions
+/// when their merge key is in <c>shared</c> (or <c>shared</c> is null), otherwise within one description.
+/// </summary>
+internal sealed class ShapeBuilder(DiagnosticBag diagnostics, IReadOnlyDictionary<string, string> names, IReadOnlySet<string>? shared = null)
 {
 	readonly Dictionary<string, ModelType> models = new(StringComparer.Ordinal);
 	readonly Stack<string> resolving = new();
@@ -146,7 +149,10 @@ internal sealed class ShapeBuilder(DiagnosticBag diagnostics, IReadOnlyDictionar
 
 	ModelType Intern(string shapeKey, ModelKind kind, NameContext context, Action<ModelType> fill)
 	{
-		var id = context.Direction + ":" + shapeKey;
+		var id = MergeKey(context.Direction, shapeKey);
+
+		if (shared is not null && !shared.Contains(id))
+			id = context.Root + ":" + id;
 
 		if (!models.TryGetValue(id, out var model))
 		{
@@ -162,6 +168,9 @@ internal sealed class ShapeBuilder(DiagnosticBag diagnostics, IReadOnlyDictionar
 
 		return model;
 	}
+
+	/// <summary>What a model is merged on when it merges across descriptions: its direction and shape.</summary>
+	public static string MergeKey(Direction direction, string shapeKey) => direction + ":" + shapeKey;
 
 	static string? Description(JsonNode? schema, JsonObject document)
 		=> JsonText.String(schema, "description") ?? JsonText.String(References.Resolve(schema, document).Node, "description");

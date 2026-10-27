@@ -198,14 +198,27 @@ A generated type is named `{Root}{Version}{Path}{Suffix}`:
   spelled at the end of the schema's name (`errors_2_0_0`, `errors_v2`) is dropped when the media
   type supplies one, so the version is not written twice.
 
-Types merge when their shape and direction are identical, across files as well as within one,
-and a merged type takes its shortest candidate name, ties broken in ordinal order. A part merged
-from more than one description, reached at the same path in each, is named by that shared tail
-alone — `metadata` in every description becomes `MetadataResponse`, not one description's
-`{Root}{Version}MetadataResponse`. A part merged within one description keeps the shortest
-name, even when it sits under two differently named components (an `errors` and a `problems`
-body sharing a `source` object give `ErrorsV2Source`). A whole body shared by several
-descriptions keeps the shortest name, since it has no tail to share.
+Types merge when their shape and direction are identical, and a merged type takes its shortest
+candidate name, ties broken in ordinal order. Within one description that is the whole rule. A
+part merged within one description keeps the shortest name, even when it sits under two
+differently named components (an `errors` and a `problems` body sharing a `source` object give
+`ErrorsV2Source`).
+
+Across descriptions, a shape merges only when every description reaches it at the same path,
+and every shape nested inside it merges across descriptions too. It is then named by that shared
+tail alone: `metadata` in every description becomes `MetadataResponse`, not one description's
+`{Root}{Version}MetadataResponse`. Any other shape stays separate in each description, so a whole
+body two descriptions share gives each its own type (`WidgetV2Response` and `GadgetV0Response`).
+This keeps a description's type names fixed when another description is added, removed or
+renamed. A shared name that depended on the shortest name across every file would change with no
+edit near it. The nested-shape condition stops a merged type from holding a type that belongs to
+just one of its descriptions. A small reference object reached at many paths keeps the parts
+holding it in their own descriptions. Error bodies are the exception: they merge across
+descriptions whenever their shapes match, as one error type usually serves every description.
+
+The generator finds these shapes by building the model twice. The first pass merges every shape
+everywhere, as the old rule did, and only answers which shapes qualify. The second pass builds
+the model that is generated.
 
 When different shapes want one name, the one a GET returns keeps it — or, when no GET returns
 any of them, the one reached from strictly the most descriptions — and the others gain their
