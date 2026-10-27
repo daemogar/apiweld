@@ -5,8 +5,10 @@ public sealed class Page<T>
 {
 	readonly PageFetcher<T> fetch;
 	readonly string body;
+	readonly int full;
+	readonly ApiPaging paging;
 
-	internal Page(PageFetch<T> page, int offset, int? limit, PageFetcher<T> fetch)
+	internal Page(PageFetch<T> page, int offset, int? limit, PageFetcher<T> fetch, int? full, ApiPaging paging)
 	{
 		Items = page.Items;
 		Total = page.Total;
@@ -14,6 +16,8 @@ public sealed class Page<T>
 		Limit = limit;
 		body = page.Body;
 		this.fetch = fetch;
+		this.full = PageWalker.Grown(full, limit, page.Items.Count);
+		this.paging = paging;
 	}
 
 	/// <summary>This page's rows.</summary>
@@ -28,8 +32,9 @@ public sealed class Page<T>
 	/// <summary>The total the server reported, or null when it sent no total header.</summary>
 	public int? Total { get; }
 
-	/// <summary>Whether the server's total says rows remain after this page.</summary>
-	public bool HasMore => Total is { } total && Items.Count > 0 && Offset + Items.Count < total;
+	/// <summary>Whether rows remain: none when the page is longer than the limit sent; else by the total, or by whether the page came back full.</summary>
+	public bool HasMore => Items.Count > 0 && !(Items.Count > Limit)
+		&& (Total is { } total ? Offset + Items.Count < total : Items.Count == full);
 
 	/// <summary>The next page, or null when there is none. A page fetched by hand is never narrowed; a failure throws.</summary>
 	public async Task<Page<T>?> NextAsync(CancellationToken cancellationToken = default)
@@ -38,10 +43,12 @@ public sealed class Page<T>
 			return null;
 
 		var offset = Offset + Items.Count;
-		var page = await fetch(offset, Limit, cancellationToken).ConfigureAwait(false);
+		var asked = PageWalker.Asked(paging, offset, Limit, full);
+		var page = await fetch(offset, asked, cancellationToken).ConfigureAwait(false);
 
-		await PageWalker.GuardAsync(page, body, offset, Limit, fetch, cancellationToken).ConfigureAwait(false);
+		if (await PageWalker.GuardAsync(page, body, offset, asked, fetch, paging.Undeclared, cancellationToken).ConfigureAwait(false))
+			return null;
 
-		return new(page, offset, Limit, fetch);
+		return new(page, offset, Limit, fetch, full, paging);
 	}
 }

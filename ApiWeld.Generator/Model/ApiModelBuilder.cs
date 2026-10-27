@@ -151,11 +151,9 @@ internal sealed class ApiModelBuilder
 		var errors = Errors(file, document, resource, route, operation);
 		var accept = string.Join(", ", new[] { mediaType }.OfType<string>().Concat(errors.MediaTypes.Where(type => type != mediaType)));
 		var parameters = Parameters(file, label, document, item, operation, out var pathTypes);
-		var paged = method == "get" && response is ListRef
-			&& parameters.Any(p => p.In == "query" && p.Name == manifest.Paging.Offset)
-			&& parameters.Any(p => p.In == "query" && p.Name == manifest.Paging.Limit);
+		var paging = method == "get" && response is ListRef ? Paging(document, item, operation, parameters) : null;
 
-		if (paged)
+		if (paging is not null)
 			parameters.RemoveAll(p => p.In == "query" && p.Name == manifest.Paging.Offset);
 
 		if (Place(file, label, path, pathTypes) is not { } node)
@@ -173,7 +171,7 @@ internal sealed class ApiModelBuilder
 			ContentType = body?.MediaType,
 			Response = response,
 			Request = request,
-			IsPaged = paged,
+			Paging = paging,
 			Parameters = parameters,
 			Errors = errors.Codes,
 			ErrorRanges = errors.Ranges,
@@ -304,6 +302,28 @@ internal sealed class ApiModelBuilder
 
 		return parameters;
 	}
+
+	/// <summary>How a list is paged: by the offset and limit it declares, or by the manifest's names when it declares neither.</summary>
+	PagedModel Paging(JsonObject document, JsonObject item, JsonObject operation, List<QueryParameter> parameters)
+	{
+		var offset = parameters.Any(p => p.In == "query" && p.Name == manifest.Paging.Offset);
+		var limit = parameters.Any(p => p.In == "query" && p.Name == manifest.Paging.Limit);
+
+		if (!offset && !limit)
+			return new(true, true, null, Undeclared: true);
+
+		// An operation's own declaration overrides its path's, so it is read last.
+		var schema = new[] { item["parameters"], operation["parameters"] }
+			.SelectMany(list => list as JsonArray ?? [])
+			.Select(entry => References.Resolve(entry, document).Node)
+			.Where(parameter => JsonText.String(parameter, "in") == "query" && JsonText.String(parameter, "name") == manifest.Paging.Limit)
+			.Select(parameter => References.Resolve(parameter!["schema"], document).Node)
+			.LastOrDefault();
+
+		return new(offset, limit, Whole(schema?["default"]), Whole(schema?["maximum"]));
+	}
+
+	static int? Whole(JsonNode? node) => node is JsonValue value && value.TryGetValue<int>(out var number) ? number : null;
 
 	static bool IsAbsorbed(string header) => new string(header.Where(char.IsLetter).ToArray()).ToLowerInvariant() is "accept" or "contenttype";
 

@@ -95,6 +95,36 @@ public class EmissionTests
 		Assert.Empty(diagnostics);
 	}
 
+	[Fact]
+	public void Compiles_every_kind_of_paged_operation()
+	{
+		const string offsetOnly = """[ { "name": "offset", "in": "query", "schema": { "type": "integer" } } ]""";
+		const string described = """
+			[ { "name": "offset", "in": "query", "schema": { "type": "integer" } },
+			  { "name": "limit", "in": "query", "schema": { "type": "integer", "default": 25, "maximum": 50 } } ]
+			""";
+		var description = Descriptions.Document($$"""
+			{
+				"/api/widgets": { "get": {{Descriptions.Returns("application/json", Descriptions.Things, offsetOnly)}} },
+				"/api/gadgets": { "get": {{Descriptions.Returns("application/json", Descriptions.Things, described)}} },
+				"/api/gizmos": { "get": {{Descriptions.Returns("application/json", Descriptions.Things)}} }
+			}
+			""");
+
+		var result = ClientGenerator.Generate(FixtureManifest, [new DescriptionSource("widgets.json", description)]);
+		Assert.True(result.Succeeded, string.Join("\n", result.Diagnostics));
+
+		var (_, diagnostics) = Compiler.Compile(result.Files.Select(file => (file.Path, file.Content)).Append(("Consumer.cs", Consumer)));
+
+		Assert.Empty(diagnostics);
+
+		var code = string.Join("\n", result.Files.Select(file => file.Content));
+
+		Assert.Contains("""Paging = new("offset", null, "X-Total-Count"),""", code);
+		Assert.Contains("""Paging = new("offset", "limit", "X-Total-Count") { DefaultLimit = 25, MaximumLimit = 50 },""", code);
+		Assert.Contains("""Paging = new("offset", "limit", "X-Total-Count") { Undeclared = true },""", code);
+	}
+
 	[Theory]
 	[InlineData("WidgetsNode", "the navigation class for /widgets")]
 	[InlineData("WidgetsV0Operations", "the navigation class for /widgets")]

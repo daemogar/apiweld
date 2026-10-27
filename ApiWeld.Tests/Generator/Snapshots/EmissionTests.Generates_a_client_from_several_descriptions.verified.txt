@@ -447,6 +447,7 @@ public sealed class GadgetsV0Operations
 	static readonly ApiOperation GetOperation = new(HttpMethod.Get, "api/gadgets")
 	{
 		Accept = "application/json",
+		Paging = new("offset", "limit", "X-Total-Count") { Undeclared = true },
 	};
 
 	readonly ApiTransport transport;
@@ -462,9 +463,17 @@ public sealed class GadgetsV0Operations
 	public HttpRequestMessage BuildGetRequest()
 		=> transport.CreateRequest(GetOperation, path, null, null);
 
-	/// <summary>Sends GET /gadgets.</summary>
-	public async Task<List<GadgetV0Response>> GetAsync(CancellationToken cancellationToken = default)
-		=> await transport.SendAsync<List<GadgetV0Response>>(GetOperation, BuildGetRequest(), cancellationToken) ?? [];
+	/// <summary>Every row of GET /gadgets, walking all pages.</summary>
+	public Task<List<GadgetV0Response>> GetAsync(CancellationToken cancellationToken = default)
+		=> transport.GetAllAsync<GadgetV0Response>(GetOperation, path, null, cancellationToken);
+
+	/// <summary>The rows of GET /gadgets, fetching each page when it is reached.</summary>
+	public IAsyncEnumerable<GadgetV0Response> EnumerateAsync(CancellationToken cancellationToken = default)
+		=> transport.EnumerateAsync<GadgetV0Response>(GetOperation, path, null, cancellationToken);
+
+	/// <summary>One page of GET /gadgets.</summary>
+	public Task<Page<GadgetV0Response>> GetPagedAsync(int offset, int? limit = null, CancellationToken cancellationToken = default)
+		=> transport.GetPageAsync<GadgetV0Response>(GetOperation, path, null, offset, limit, cancellationToken);
 }
 
 ==== Paths/Lookups.g.cs ====
@@ -506,6 +515,7 @@ public sealed class LookupsV1Operations
 	{
 		Accept = "application/vnd.example.v1+json",
 		Version = "1",
+		Paging = new("offset", "limit", "X-Total-Count") { Undeclared = true },
 	};
 
 	static readonly ApiOperation PostOperation = new(HttpMethod.Post, "query/lookups")
@@ -528,9 +538,17 @@ public sealed class LookupsV1Operations
 	public HttpRequestMessage BuildGetRequest()
 		=> transport.CreateRequest(GetOperation, path, null, null);
 
-	/// <summary>Sends GET /lookups.</summary>
-	public async Task<List<LookupV1Response>> GetAsync(CancellationToken cancellationToken = default)
-		=> await transport.SendAsync<List<LookupV1Response>>(GetOperation, BuildGetRequest(), cancellationToken) ?? [];
+	/// <summary>Every row of GET /lookups, walking all pages.</summary>
+	public Task<List<LookupV1Response>> GetAsync(CancellationToken cancellationToken = default)
+		=> transport.GetAllAsync<LookupV1Response>(GetOperation, path, null, cancellationToken);
+
+	/// <summary>The rows of GET /lookups, fetching each page when it is reached.</summary>
+	public IAsyncEnumerable<LookupV1Response> EnumerateAsync(CancellationToken cancellationToken = default)
+		=> transport.EnumerateAsync<LookupV1Response>(GetOperation, path, null, cancellationToken);
+
+	/// <summary>One page of GET /lookups.</summary>
+	public Task<Page<LookupV1Response>> GetPagedAsync(int offset, int? limit = null, CancellationToken cancellationToken = default)
+		=> transport.GetPageAsync<LookupV1Response>(GetOperation, path, null, offset, limit, cancellationToken);
 
 	/// <summary>The POST /lookups request, built but not sent.</summary>
 	public HttpRequestMessage BuildPostRequest(LookupV1Request body)
@@ -583,7 +601,7 @@ public sealed class WidgetsV2Operations
 	{
 		Accept = "application/vnd.example.v2+json, application/vnd.example.errors.v1+json",
 		Version = "2",
-		Paging = new("offset", "limit", "X-Total-Count"),
+		Paging = new("offset", "limit", "X-Total-Count") { DefaultLimit = 2 },
 		Errors = new Dictionary<int, ApiErrorFactory>
 		{
 			[400] = ApiResponseException<ErrorsV1>.Create,
@@ -833,6 +851,7 @@ public sealed class WidgetsItemHistoryV2Operations
 	{
 		Accept = "application/vnd.example.v2+json",
 		Version = "2",
+		Paging = new("offset", "limit", "X-Total-Count") { Undeclared = true },
 	};
 
 	readonly ApiTransport transport;
@@ -848,13 +867,26 @@ public sealed class WidgetsItemHistoryV2Operations
 	public HttpRequestMessage BuildGetRequest(Action<WidgetsItemHistoryV2GetQuery>? query = null)
 		=> transport.CreateRequest(GetOperation, path, ApiQuery.Build(query), null);
 
-	/// <summary>Sends GET /widgets/{widgetId}/history.</summary>
-	public Task<List<WidgetV2Response>> GetAsync(CancellationToken cancellationToken = default)
-		=> GetAsync(null, cancellationToken);
+	/// <summary>Every row of GET /widgets/{widgetId}/history, walking all pages.</summary>
+	public Task<List<WidgetV2Response>> GetAsync(CancellationToken cancellationToken = default) => GetAsync(null, cancellationToken);
 
-	/// <summary>Sends GET /widgets/{widgetId}/history with query parameters.</summary>
-	public async Task<List<WidgetV2Response>> GetAsync(Action<WidgetsItemHistoryV2GetQuery>? query, CancellationToken cancellationToken = default)
-		=> await transport.SendAsync<List<WidgetV2Response>>(GetOperation, BuildGetRequest(query), cancellationToken) ?? [];
+	/// <summary>Every row of GET /widgets/{widgetId}/history matching the query, walking all pages.</summary>
+	public Task<List<WidgetV2Response>> GetAsync(Action<WidgetsItemHistoryV2GetQuery>? query, CancellationToken cancellationToken = default)
+		=> transport.GetAllAsync<WidgetV2Response>(GetOperation, path, ApiQuery.Build(query), cancellationToken);
+
+	/// <summary>The rows of GET /widgets/{widgetId}/history, fetching each page when it is reached.</summary>
+	public IAsyncEnumerable<WidgetV2Response> EnumerateAsync(CancellationToken cancellationToken = default) => EnumerateAsync(null, cancellationToken);
+
+	/// <summary>The rows of GET /widgets/{widgetId}/history matching the query, fetching each page when it is reached.</summary>
+	public IAsyncEnumerable<WidgetV2Response> EnumerateAsync(Action<WidgetsItemHistoryV2GetQuery>? query, CancellationToken cancellationToken = default)
+		=> transport.EnumerateAsync<WidgetV2Response>(GetOperation, path, ApiQuery.Build(query), cancellationToken);
+
+	/// <summary>One page of GET /widgets/{widgetId}/history.</summary>
+	public Task<Page<WidgetV2Response>> GetPagedAsync(int offset, int? limit = null, CancellationToken cancellationToken = default) => GetPagedAsync(offset, limit, null, cancellationToken);
+
+	/// <summary>One page of GET /widgets/{widgetId}/history matching the query.</summary>
+	public Task<Page<WidgetV2Response>> GetPagedAsync(int offset, int? limit, Action<WidgetsItemHistoryV2GetQuery>? query, CancellationToken cancellationToken = default)
+		=> transport.GetPageAsync<WidgetV2Response>(GetOperation, path, ApiQuery.Build(query), offset, limit, cancellationToken);
 }
 
 /// <summary>Parameters for GET /widgets/{widgetId}/history at V2.</summary>
@@ -908,6 +940,7 @@ public sealed class WidgetsItemPartsV1Operations
 	{
 		Accept = "application/vnd.example.v1+json",
 		Version = "1",
+		Paging = new("offset", "limit", "X-Total-Count") { Undeclared = true },
 	};
 
 	readonly ApiTransport transport;
@@ -923,7 +956,15 @@ public sealed class WidgetsItemPartsV1Operations
 	public HttpRequestMessage BuildGetRequest()
 		=> transport.CreateRequest(GetOperation, path, null, null);
 
-	/// <summary>Sends GET /widgets/{widgetId}/parts.</summary>
-	public async Task<List<WidgetPartV1Response>> GetAsync(CancellationToken cancellationToken = default)
-		=> await transport.SendAsync<List<WidgetPartV1Response>>(GetOperation, BuildGetRequest(), cancellationToken) ?? [];
+	/// <summary>Every row of GET /widgets/{widgetId}/parts, walking all pages.</summary>
+	public Task<List<WidgetPartV1Response>> GetAsync(CancellationToken cancellationToken = default)
+		=> transport.GetAllAsync<WidgetPartV1Response>(GetOperation, path, null, cancellationToken);
+
+	/// <summary>The rows of GET /widgets/{widgetId}/parts, fetching each page when it is reached.</summary>
+	public IAsyncEnumerable<WidgetPartV1Response> EnumerateAsync(CancellationToken cancellationToken = default)
+		=> transport.EnumerateAsync<WidgetPartV1Response>(GetOperation, path, null, cancellationToken);
+
+	/// <summary>One page of GET /widgets/{widgetId}/parts.</summary>
+	public Task<Page<WidgetPartV1Response>> GetPagedAsync(int offset, int? limit = null, CancellationToken cancellationToken = default)
+		=> transport.GetPageAsync<WidgetPartV1Response>(GetOperation, path, null, offset, limit, cancellationToken);
 }

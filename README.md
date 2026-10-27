@@ -328,25 +328,60 @@ then its range (`4XX` or `5XX`), then `default`.
 
 ### Page walking
 
-An operation is paged when it returns a list and takes both an offset and a limit parameter
-(named by the manifest's `paging` settings). Its `GetAsync` returns every row, `EnumerateAsync`
+Every `GET` that returns a list is paged. Its `GetAsync` returns every row, `EnumerateAsync`
 streams rows as pages arrive, and `GetPagedAsync` returns one `Page<T>` whose `NextAsync`
-fetches the page after it. The walk starts at offset zero and:
+fetches the page after it. The offset and limit parameters are named by the manifest's `paging`
+settings.
 
-1. **stops after the first page when the response has no total-count header** — the page is
-   returned as a normal response, and `Page<T>.HasMore` is false;
-2. otherwise keeps requesting until the rows fetched reach the total, or a page comes back empty;
-3. **throws** when the server is ignoring the offset. Otherwise every row of page one would come
+The walk sends a limit only when the caller sets one, through the query object or
+`GetPagedAsync`, so a client's page size otherwise stays the server's business. A described
+`maximum` for the limit caps what is sent. The size of a full page is the limit sent; or, when
+none is, the `default` the description gives the limit parameter, capped by that `maximum` as
+well; or, when there is neither, the size of the first page. There is no built-in fallback size:
+a guessed size larger than the server's would end the walk after one short page. The walk starts
+at offset zero and:
+
+1. **takes a page longer than the limit it sent as the whole answer**: the server ignored the
+   limit and does not page at all, whatever its total says;
+2. otherwise **follows the total-count header** when the response sends one, requesting until
+   the rows fetched reach the total, or a page comes back empty;
+3. **without that header, follows the page size**. A full page is followed by one more request.
+   A shorter page means the rows ran out, and the walk ends with no further request. When the
+   rows are an exact multiple of the page size, the walk ends on an empty page instead of
+   silently missing the last one. A page longer than an *assumed* size ignored nothing, so it
+   becomes the page size from then on;
+4. **throws** when the server is ignoring the offset. Otherwise every row of page one would come
    back again and again until the total was reached.
+
+`Page<T>.HasMore` answers the same way.
+
+When the first page sets the size, a result that fits in one page costs one extra request: the
+empty page that confirms it. A described `default` that is wrong in the other direction (larger
+than what the server really serves) still ends the walk after one short page, so a description
+should only give a `default` the server honors.
+
+How each operation is walked depends on which parameters its description declares:
+
+- **Both:** as above.
+- **Offset alone:** no limit can be sent, so the first page's size is taken as the server's page
+  size, and the walk carries on while pages come back that long.
+- **Limit alone:** there is no offset to move, so after the first page each request asks for every
+  row up to the end of the next page (`limit` 4, then 6, for pages of 2), keeping only the rows
+  past the ones already returned. The first request sends a limit only when the caller set one. Each request repeats the rows before it, which costs bandwidth
+  but loses nothing.
+- **Neither:** the walk sends the manifest's offset name anyway. A server that does not page
+  answers every request with the same rows, so the walk ends after the first page, or, when that
+  page happened to be full, after the repeat check below finds it repeated. That repeat does not
+  throw here, because nothing promised the offset would be honored.
 
 A page identical to the one before it is only a suspicion, because real rows can repeat. The
 walk then requests the page one row later. A server that honors the offset answers that
 differently, unless every row in the run is identical. It throws only when the shifted page
-matches as well.
+matches as well, and the operation declares an offset.
 
-There is no request cap, so a large result set is never cut short. The total always ends the
-walk. `limit` stays on the query object and acts as the page size; the offset is
-owned by the walk and does not appear there.
+There is no request cap, so a large result set is never cut short. The total, or a page that is
+not full, always ends the walk. `limit` stays on the query object and acts as the page size; the
+offset is owned by the walk and does not appear there.
 
 #### A page that fails
 
@@ -369,9 +404,11 @@ the walk is over. A page fetched by hand with `GetPagedAsync` is never narrowed;
 throws as it is.
 
 Narrowing needs a window to narrow, and that window is the size of the page before the failure.
-So a failure on the **first** page — where neither the page size nor the total is known yet —
-throws as it is, as does any failure that is not an error status or an unreadable body (a
-timeout, a cancelled call, a version mismatch). `PageNarrowingRequests` is the extra requests one
+Without a total, the whole window is narrowed, and the page after it says whether the rows went
+on. An operation with no limit parameter cannot ask for half a window, so its failed page is
+reported as a range at once, with no extra requests. A failure on the **first** page, before any
+page has been seen, throws as it is, as does any failure that is not an error status or an
+unreadable body (a timeout, a cancelled call, a version mismatch). `PageNarrowingRequests` is the extra requests one
 failed page may spend, 32 by default and 0 to turn narrowing off; each halving costs two. A
 server that answers a limited request with more rows than were asked for is one that ignores
 `limit`, and its page is reported as a range.

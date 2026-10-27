@@ -121,8 +121,20 @@ internal static class PathEmitter
 		if (operation.Version is { } version)
 			writer.Line($"Version = {CodeWriter.Literal(version)},");
 
-		if (operation.IsPaged)
-			writer.Line($"Paging = new({CodeWriter.Literal(paging.Offset)}, {CodeWriter.Literal(paging.Limit)}, {CodeWriter.Literal(paging.TotalHeader)}),");
+		if (operation.Paging is { } paged)
+		{
+			var offset = paged.Offset ? CodeWriter.Literal(paging.Offset) : "null";
+			var limit = paged.Limit ? CodeWriter.Literal(paging.Limit) : "null";
+			var settings = new[]
+			{
+				paged.DefaultLimit is { } size ? $"DefaultLimit = {size}" : null,
+				paged.MaximumLimit is { } maximum ? $"MaximumLimit = {maximum}" : null,
+				paged.Undeclared ? "Undeclared = true" : null
+			}.OfType<string>().ToList();
+			var initializer = settings.Count > 0 ? $" {{ {string.Join(", ", settings)} }}" : "";
+
+			writer.Line($"Paging = new({offset}, {limit}, {CodeWriter.Literal(paging.TotalHeader)}){initializer},");
+		}
 
 		Factories(writer, "Errors", operation.Errors);
 		Factories(writer, "ErrorRanges", operation.ErrorRanges);
@@ -170,7 +182,7 @@ internal static class PathEmitter
 
 		if (operation.IsPaged)
 		{
-			Paged(writer, operation, descriptor, query!, where);
+			Paged(writer, operation, descriptor, query, where);
 			return;
 		}
 
@@ -200,9 +212,15 @@ internal static class PathEmitter
 		writer.Line($"\t=> {send};");
 	}
 
-	static void Paged(CodeWriter writer, OperationModel operation, string descriptor, string query, string where)
+	static void Paged(CodeWriter writer, OperationModel operation, string descriptor, string? query, string where)
 	{
 		var item = TypeNames.Of(((ListRef)operation.Response!).Item);
+
+		if (query is null)
+		{
+			PagedWithoutQuery(writer, item, descriptor, where, operation.Paging!.Limit);
+			return;
+		}
 
 		writer.Line();
 		writer.Summary($"Every row of GET {where}, walking all pages.");
@@ -225,6 +243,25 @@ internal static class PathEmitter
 		writer.Summary($"One page of GET {where} matching the query.");
 		writer.Line($"public Task<Page<{item}>> GetPagedAsync(int offset, int? limit, Action<{query}>? query, CancellationToken cancellationToken = default)");
 		writer.Line($"\t=> transport.GetPageAsync<{item}>({descriptor}, path, ApiQuery.Build(query), offset, limit, cancellationToken);");
+	}
+
+	/// <summary>A paged operation with no query object: it declares nothing but the offset the walk owns, or nothing at all.</summary>
+	static void PagedWithoutQuery(CodeWriter writer, string item, string descriptor, string where, bool limit)
+	{
+		writer.Line();
+		writer.Summary($"Every row of GET {where}, walking all pages.");
+		writer.Line($"public Task<List<{item}>> GetAsync(CancellationToken cancellationToken = default)");
+		writer.Line($"\t=> transport.GetAllAsync<{item}>({descriptor}, path, null, cancellationToken);");
+		writer.Line();
+		writer.Summary($"The rows of GET {where}, fetching each page when it is reached.");
+		writer.Line($"public IAsyncEnumerable<{item}> EnumerateAsync(CancellationToken cancellationToken = default)");
+		writer.Line($"\t=> transport.EnumerateAsync<{item}>({descriptor}, path, null, cancellationToken);");
+		writer.Line();
+		writer.Summary($"One page of GET {where}.");
+		writer.Line(limit
+			? $"public Task<Page<{item}>> GetPagedAsync(int offset, int? limit = null, CancellationToken cancellationToken = default)"
+			: $"public Task<Page<{item}>> GetPagedAsync(int offset, CancellationToken cancellationToken = default)");
+		writer.Line($"\t=> transport.GetPageAsync<{item}>({descriptor}, path, null, offset, {(limit ? "limit" : "null")}, cancellationToken);");
 	}
 
 	static void Query(CodeWriter writer, PathNode node, string member, OperationModel operation)
