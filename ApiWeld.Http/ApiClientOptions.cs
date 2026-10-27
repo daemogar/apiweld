@@ -16,6 +16,13 @@ public class ApiClientOptions
 	/// <summary>What happens when a response carries a different version than was asked for.</summary>
 	public VersionMismatchBehavior VersionMismatch { get; set; } = VersionMismatchBehavior.Throw;
 
+	/// <summary>
+	/// Extra requests one failed page of a walk may spend narrowing the failure to the record behind it;
+	/// 0 turns narrowing off, and the failure is thrown as it is. Each halving costs two, so 32 narrows a
+	/// page of up to 65,536 records. See README.md, "Page walking".
+	/// </summary>
+	public int PageNarrowingRequests { get; set; } = 32;
+
 	/// <summary>Trades a key for a bearer token before each request; off when null.</summary>
 	public TokenExchangeOptions? TokenExchange { get; set; }
 }

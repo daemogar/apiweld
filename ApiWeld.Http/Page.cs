@@ -3,10 +3,10 @@
 /// <summary>One page of a paged operation, able to fetch the page after it.</summary>
 public sealed class Page<T>
 {
-	readonly Func<int, CancellationToken, Task<PageFetch<T>>> fetch;
+	readonly PageFetcher<T> fetch;
 	readonly string body;
 
-	internal Page(PageFetch<T> page, int offset, int? limit, Func<int, CancellationToken, Task<PageFetch<T>>> fetch)
+	internal Page(PageFetch<T> page, int offset, int? limit, PageFetcher<T> fetch)
 	{
 		Items = page.Items;
 		Total = page.Total;
@@ -31,16 +31,16 @@ public sealed class Page<T>
 	/// <summary>Whether the server's total says rows remain after this page.</summary>
 	public bool HasMore => Total is { } total && Items.Count > 0 && Offset + Items.Count < total;
 
-	/// <summary>The next page, or null when there is none.</summary>
+	/// <summary>The next page, or null when there is none. A page fetched by hand is never narrowed; a failure throws.</summary>
 	public async Task<Page<T>?> NextAsync(CancellationToken cancellationToken = default)
 	{
 		if (!HasMore)
 			return null;
 
 		var offset = Offset + Items.Count;
-		var page = await fetch(offset, cancellationToken).ConfigureAwait(false);
+		var page = await fetch(offset, Limit, cancellationToken).ConfigureAwait(false);
 
-		await PageWalker.GuardAsync(page, body, offset, fetch, cancellationToken).ConfigureAwait(false);
+		await PageWalker.GuardAsync(page, body, offset, Limit, fetch, cancellationToken).ConfigureAwait(false);
 
 		return new(page, offset, Limit, fetch);
 	}

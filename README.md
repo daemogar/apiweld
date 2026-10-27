@@ -335,6 +335,34 @@ There is no request cap, so a large result set is never cut short. The total alw
 walk. `limit` stays on the query object and acts as the page size; the offset is
 owned by the walk and does not appear there.
 
+#### A page that fails
+
+A page that comes back as an error status, or with a body that will not read, is usually one bad
+record rather than a bad range — and losing the other records of the walk with it is a poor
+trade. So the walk narrows the failure instead of ending on it. It asks for each half of the
+failed page by itself, with an explicit `limit`, and keeps halving the side that fails:
+
+- one bad record is found in about 2 × log2(page size) extra requests, and every other record of
+  the page is returned;
+- a page that fails on **both** halves is reported as a range, not a record, and neither half is
+  split further — a failure that wide is not one record's fault;
+- the walk then carries on with the page after it, so one bad page does not end the walk.
+
+When the walk ends with records missing, it **throws** `ApiPagingException`, whose `Failures`
+name each record or range and carry the failure behind it. `GetAsync` throws
+`ApiPagingException<T>`, whose `Rows` are every row it did fetch — the rows are in the exception,
+not lost. `EnumerateAsync` has already yielded those rows, so it throws the non-generic one once
+the walk is over. A page fetched by hand with `GetPagedAsync` is never narrowed; its failure
+throws as it is.
+
+Narrowing needs a window to narrow, and that window is the size of the page before the failure.
+So a failure on the **first** page — where neither the page size nor the total is known yet —
+throws as it is, as does any failure that is not an error status or an unreadable body (a
+timeout, a cancelled call, a version mismatch). `PageNarrowingRequests` is the extra requests one
+failed page may spend, 32 by default and 0 to turn narrowing off; each halving costs two. A
+server that answers a limited request with more rows than were asked for is one that ignores
+`limit`, and its page is reported as a range.
+
 ### Token exchange
 
 Some APIs take a long-lived key once and hand back a short-lived bearer token for every other
