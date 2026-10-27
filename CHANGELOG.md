@@ -76,7 +76,7 @@
   stopping with an exception.
 - `ApiWeld.Http` and `ApiWeld.Generator`: a paged list whose server sends no total-count header
   is walked to the end instead of stopping after page one. A page is full at the caller's limit,
-  else the description's `default` for it, else 100, capped by a described `maximum`; the walk
-  continues while pages come back full. A page longer than a limit the caller sent is the whole
-  answer. Every `GET` that returns a list is now paged, whichever of offset and limit it declares,
+  else the description's `default` for it, capped by a described `maximum`, else the first page's
+  size. No limit is sent that the caller did not set, and the walk continues while pages come
+  back full. A page longer than a limit the caller sent is the whole answer. Every `GET` that returns a list is now paged, whichever of offset and limit it declares,
   if either. See the README's "Page walking".

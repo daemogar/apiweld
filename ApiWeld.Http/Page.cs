@@ -6,9 +6,9 @@ public sealed class Page<T>
 	readonly PageFetcher<T> fetch;
 	readonly string body;
 	readonly int full;
-	readonly bool undeclared;
+	readonly ApiPaging paging;
 
-	internal Page(PageFetch<T> page, int offset, int? limit, PageFetcher<T> fetch, int? full, bool undeclared)
+	internal Page(PageFetch<T> page, int offset, int? limit, PageFetcher<T> fetch, int? full, ApiPaging paging)
 	{
 		Items = page.Items;
 		Total = page.Total;
@@ -17,7 +17,7 @@ public sealed class Page<T>
 		body = page.Body;
 		this.fetch = fetch;
 		this.full = PageWalker.Grown(full, limit, page.Items.Count);
-		this.undeclared = undeclared;
+		this.paging = paging;
 	}
 
 	/// <summary>This page's rows.</summary>
@@ -43,11 +43,12 @@ public sealed class Page<T>
 			return null;
 
 		var offset = Offset + Items.Count;
-		var page = await fetch(offset, Limit, cancellationToken).ConfigureAwait(false);
+		var asked = PageWalker.Asked(paging, offset, Limit, full);
+		var page = await fetch(offset, asked, cancellationToken).ConfigureAwait(false);
 
-		if (await PageWalker.GuardAsync(page, body, offset, Limit, fetch, undeclared, cancellationToken).ConfigureAwait(false))
+		if (await PageWalker.GuardAsync(page, body, offset, asked, fetch, paging.Undeclared, cancellationToken).ConfigureAwait(false))
 			return null;
 
-		return new(page, offset, Limit, fetch, full, undeclared);
+		return new(page, offset, Limit, fetch, full, paging);
 	}
 }

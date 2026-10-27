@@ -145,16 +145,43 @@ public class PagingTests
 		Assert.All(handler.Requests, r => Assert.DoesNotContain("limit=", r.Request.RequestUri!.Query));
 	}
 
+	// Nothing gives a page size, so the first page's is the server's; a guessed size could end the walk early.
 	[Fact]
-	public async Task Walks_by_100_when_the_description_gives_no_default()
+	public async Task Walks_at_the_first_pages_size_when_nothing_gives_a_page_size()
 	{
-		var handler = Server(rows: 150, pageSize: 100);
+		var handler = Server(rows: 120, pageSize: 50);
 		var operation = new ApiOperation(HttpMethod.Get, "api/rows") { Paging = new("offset", "limit", "X-Total-Count") };
 
 		var rows = await Transport(handler).GetAllAsync<Row>(operation, [], null, TestContext.Current.CancellationToken);
 
-		Assert.Equal(150, rows.Count);
-		Assert.Equal(new[] { "0", "100" }, Offsets(handler));
+		Assert.Equal(120, rows.Count);
+		Assert.Equal(new[] { "0", "50", "100" }, Offsets(handler));
+		Assert.All(handler.Requests, r => Assert.DoesNotContain("limit=", r.Request.RequestUri!.Query));
+	}
+
+	[Fact]
+	public async Task Confirms_a_lone_first_page_with_an_empty_one_when_nothing_gives_a_page_size()
+	{
+		var handler = Server(rows: 7, pageSize: 50);
+		var operation = new ApiOperation(HttpMethod.Get, "api/rows") { Paging = new("offset", "limit", "X-Total-Count") };
+
+		var rows = await Transport(handler).GetAllAsync<Row>(operation, [], null, TestContext.Current.CancellationToken);
+
+		Assert.Equal(7, rows.Count);
+		Assert.Equal(new[] { "0", "7" }, Offsets(handler));
+	}
+
+	// The first request sends no limit; after it, only the limit needed to reach past the rows already fetched.
+	[Fact]
+	public async Task Walks_by_limit_alone_at_the_first_pages_size_when_nothing_gives_a_page_size()
+	{
+		var handler = Server(rows: 5);
+		var operation = new ApiOperation(HttpMethod.Get, "api/rows") { Paging = new(null, "limit", "X-Total-Count") };
+
+		var rows = await Transport(handler).GetAllAsync<Row>(operation, [], null, TestContext.Current.CancellationToken);
+
+		Assert.Equal(new[] { 0, 1, 2, 3, 4 }, Ids(rows));
+		Assert.Equal(new string?[] { null, "4", "6" }, Sent(handler, "limit"));
 	}
 
 	[Fact]
@@ -173,7 +200,7 @@ public class PagingTests
 	public async Task Walks_by_the_described_maximum_when_it_is_below_the_default()
 	{
 		var handler = Server(rows: 7, pageSize: 3);
-		var operation = new ApiOperation(HttpMethod.Get, "api/rows") { Paging = new("offset", "limit", "X-Total-Count") { MaximumLimit = 3 } };
+		var operation = new ApiOperation(HttpMethod.Get, "api/rows") { Paging = new("offset", "limit", "X-Total-Count") { DefaultLimit = 10, MaximumLimit = 3 } };
 
 		await Transport(handler).GetAllAsync<Row>(operation, [], null, TestContext.Current.CancellationToken);
 
@@ -239,7 +266,7 @@ public class PagingTests
 		var rows = await Transport(handler).GetAllAsync<Row>(Paged(2, offsetName: null), [], null, TestContext.Current.CancellationToken);
 
 		Assert.Equal(new[] { 0, 1, 2, 3, 4 }, Ids(rows));
-		Assert.Equal(new[] { "2", "4", "6" }, Sent(handler, "limit"));
+		Assert.Equal(new string?[] { null, "4", "6" }, Sent(handler, "limit"));
 		Assert.All(handler.Requests, r => Assert.DoesNotContain("offset=", r.Request.RequestUri!.Query));
 	}
 

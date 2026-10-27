@@ -4,8 +4,8 @@
 /// <remarks>See README.md, "Page walking".</remarks>
 public sealed record ApiPaging(string? Offset, string? Limit, string TotalHeader)
 {
-	/// <summary>The page size assumed when the caller sets no limit: the description's default, or 100.</summary>
-	public int DefaultLimit { get; init; } = 100;
+	/// <summary>The description's default limit, the page size when the caller sets none; null leaves it to the first page.</summary>
+	public int? DefaultLimit { get; init; }
 
 	/// <summary>The description's largest allowed limit, or null when it gives none.</summary>
 	public int? MaximumLimit { get; init; }

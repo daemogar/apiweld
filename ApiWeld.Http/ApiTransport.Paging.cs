@@ -47,7 +47,8 @@ public sealed partial class ApiTransport
 		PageFetcher<T> fetch = (at, size, token) => FetchPageAsync<T>(operation, path, query, at, size, token);
 		var sent = Sent(paging, query, limit);
 
-		return new(await fetch(offset, sent, cancellationToken).ConfigureAwait(false), offset, sent, fetch, Full(paging, sent), paging.Undeclared);
+		return new(await fetch(offset, PageWalker.Asked(paging, offset, sent, Full(paging, sent)), cancellationToken).ConfigureAwait(false),
+			offset, sent, fetch, Full(paging, sent), paging);
 	}
 
 	static ApiPaging RequirePaging(ApiOperation operation)
@@ -68,15 +69,11 @@ public sealed partial class ApiTransport
 			limit = int.TryParse(set, NumberStyles.Integer, CultureInfo.InvariantCulture, out var value) ? value : null;
 		}
 
-		// With no offset to move, a walk advances by its limit, so it must send one.
-		if (limit is null && paging.Offset is null)
-			limit = paging.DefaultLimit;
-
 		return limit is { } size ? Held(paging, size) : null;
 	}
 
-	/// <summary>The size of a full page: the limit sent, else the assumed default; null when only the first page can tell.</summary>
-	static int? Full(ApiPaging paging, int? sent) => sent ?? (paging.Limit is null ? null : Held(paging, paging.DefaultLimit));
+	/// <summary>The size of a full page: the limit sent, else the described default; null when only the first page can tell.</summary>
+	static int? Full(ApiPaging paging, int? sent) => sent ?? (paging.Limit is not null && paging.DefaultLimit is { } size ? Held(paging, size) : null);
 
 	static int Held(ApiPaging paging, int limit) => paging.MaximumLimit is { } maximum ? Math.Min(limit, maximum) : limit;
 

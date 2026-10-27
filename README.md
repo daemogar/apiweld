@@ -323,8 +323,10 @@ settings.
 The walk sends a limit only when the caller sets one, through the query object or
 `GetPagedAsync`, so a client's page size otherwise stays the server's business. A described
 `maximum` for the limit caps what is sent. The size of a full page is the limit sent; or, when
-none is, the `default` the description gives the limit parameter, else 100, capped by that
-`maximum` as well. The walk starts at offset zero and:
+none is, the `default` the description gives the limit parameter, capped by that `maximum` as
+well; or, when there is neither, the size of the first page. There is no built-in fallback size:
+a guessed size larger than the server's would end the walk after one short page. The walk starts
+at offset zero and:
 
 1. **takes a page longer than the limit it sent as the whole answer**: the server ignored the
    limit and does not page at all, whatever its total says;
@@ -340,18 +342,19 @@ none is, the `default` the description gives the limit parameter, else 100, capp
 
 `Page<T>.HasMore` answers the same way.
 
-**A server whose own page size is smaller than the assumed one, and which sends no total, is
-walked for one page only.** That first page is short, and a short page is the end. Give the
-limit parameter a `default` in the description, or set `limit` on the query, to avoid it.
+When the first page sets the size, a result that fits in one page costs one extra request: the
+empty page that confirms it. A described `default` that is wrong in the other direction (larger
+than what the server really serves) still ends the walk after one short page, so a description
+should only give a `default` the server honors.
 
 How each operation is walked depends on which parameters its description declares:
 
 - **Both:** as above.
 - **Offset alone:** no limit can be sent, so the first page's size is taken as the server's page
   size, and the walk carries on while pages come back that long.
-- **Limit alone:** there is no offset to move, so a limit is always sent, and each request asks
-  for every row up to the end of the next page (`limit` 2, then 4, then 6), keeping only the rows
-  past the ones already returned. Each request repeats the rows before it, which costs bandwidth
+- **Limit alone:** there is no offset to move, so after the first page each request asks for every
+  row up to the end of the next page (`limit` 4, then 6, for pages of 2), keeping only the rows
+  past the ones already returned. The first request sends a limit only when the caller set one. Each request repeats the rows before it, which costs bandwidth
   but loses nothing.
 - **Neither:** the walk sends the manifest's offset name anyway. A server that does not page
   answers every request with the same rows, so the walk ends after the first page, or, when that

@@ -27,14 +27,15 @@ internal static class PageWalker
 
 		while (walking)
 		{
-			var step = await StepAsync(fetch, offset, limit, size, total, narrowing, paging.Limit is not null, failures, cancellationToken).ConfigureAwait(false);
+			var asked = Asked(paging, offset, limit, full);
+			var step = await StepAsync(fetch, offset, asked, size, total, narrowing, paging.Limit is not null, failures, cancellationToken).ConfigureAwait(false);
 
 			if (step.Page is { } page)
 			{
 				if (page.Items.Count == 0)
 					break;
 
-				if (await GuardAsync(page, previous, offset, limit, fetch, paging.Undeclared, cancellationToken).ConfigureAwait(false))
+				if (await GuardAsync(page, previous, offset, asked, fetch, paging.Undeclared, cancellationToken).ConfigureAwait(false))
 					break;
 
 				foreach (var item in page.Items)
@@ -48,7 +49,7 @@ internal static class PageWalker
 				full = Grown(full, limit, page.Items.Count);
 
 				// A page longer than the limit sent means the server ignored it and does not page; it is the whole answer.
-				var ignored = page.Items.Count > limit;
+				var ignored = page.Items.Count > asked;
 
 				// Without a total, a short page is the end.
 				walking = !ignored && (total is { } count ? offset < count : page.Items.Count == full);
@@ -68,6 +69,10 @@ internal static class PageWalker
 		if (failures.Count > 0)
 			throw new ApiPagingException(operation, failures);
 	}
+
+	/// <summary>The limit to ask a window for: the one sent, or, with no offset to move, the page size once a page has shown it.</summary>
+	public static int? Asked(ApiPaging paging, int offset, int? limit, int? full)
+		=> limit ?? (paging.Offset is null && offset > 0 ? full : null);
 
 	/// <summary>The full-page size after a page: the first page sets it, and with no limit sent a longer page shows the server's is larger.</summary>
 	public static int Grown(int? full, int? limit, int count) => full is { } known && (limit is not null || count <= known) ? known : count;
