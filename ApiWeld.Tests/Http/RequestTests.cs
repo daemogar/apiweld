@@ -143,6 +143,8 @@ public class RequestTests
 		{
 			Assert.Equal("1.5", ApiRequestParameters.Format(1.5m));
 			Assert.Equal("2026-09-29", ApiRequestParameters.Format(new DateOnly(2026, 9, 29)));
+			Assert.Equal("10:30:15", ApiRequestParameters.Format(new TimeOnly(10, 30, 15)));
+			Assert.Equal("10:30:15.25", ApiRequestParameters.Format(new TimeOnly(10, 30, 15, 250)));
 			Assert.Equal("true", ApiRequestParameters.Format(true));
 			Assert.Equal("0f8fad5b-d9cb-469f-a165-70867728950e", ApiRequestParameters.Format(Guid.Parse("0f8fad5b-d9cb-469f-a165-70867728950e")));
 		}

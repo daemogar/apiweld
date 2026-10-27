@@ -53,6 +53,7 @@ public sealed class ApiRequestParameters
 		DateTimeOffset moment => moment.ToString("O", CultureInfo.InvariantCulture),
 		DateTime moment => moment.ToString("O", CultureInfo.InvariantCulture),
 		DateOnly day => day.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
+		TimeOnly time => TolerantTimeOnlyConverter.Format(time),
 		byte[] bytes => Convert.ToBase64String(bytes),
 		IFormattable formattable => formattable.ToString(null, CultureInfo.InvariantCulture),
 		_ => value.ToString() ?? ""

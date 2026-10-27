@@ -16,6 +16,9 @@ public class TolerantJsonTests
 		[JsonPropertyName("ratio")] public double? Ratio { get; set; }
 		[JsonPropertyName("flag")] public bool? Flag { get; set; }
 		[JsonPropertyName("color")] public Color? Color { get; set; }
+		[JsonPropertyName("day")] public DateOnly? Day { get; set; }
+		[JsonPropertyName("moment")] public DateTimeOffset? Moment { get; set; }
+		[JsonPropertyName("clock")] public TimeOnly? Clock { get; set; }
 		[JsonExtensionData] public Dictionary<string, JsonElement>? AdditionalData { get; set; }
 	}
 
@@ -130,6 +133,104 @@ public class TolerantJsonTests
 
 		Assert.Equal("ultraviolet", unknown?.Value);
 		Assert.Equal("""{"color":"ultraviolet"}""", JsonSerializer.Serialize(new Sample { Color = unknown }, ApiJson.Options));
+	}
+
+	[Theory]
+	[InlineData("2026-10-27")]
+	[InlineData("2026-10-27T00:00:00Z")]
+	[InlineData("2026-10-27T23:30:00-05:00")]
+	[InlineData("2026-10-27 08:15")]
+	[InlineData("20261027")]
+	[InlineData("20261027T101500Z")]
+	[InlineData("2026/10/27")]
+	[InlineData("10/27/2026")]
+	[InlineData("10/27/2026 08:15:00")]
+	public void Reads_a_date_or_the_date_part_of_a_date_time_into_a_date(string text)
+	{
+		Assert.Equal(new DateOnly(2026, 10, 27), Read($$"""{ "day": "{{text}}" }""").Day);
+	}
+
+	[Theory]
+	[InlineData("2026-10-27T10:00:00Z", "2026-10-27T10:00:00.0000000+00:00")]
+	[InlineData("2026-10-27T10:00:00.5+05:00", "2026-10-27T10:00:00.5000000+05:00")]
+	[InlineData("2026-10-27T10:00:00,5+05:00", "2026-10-27T10:00:00.5000000+05:00")]
+	[InlineData("2026-10-27T10:00:00.123456789Z", "2026-10-27T10:00:00.1234567+00:00")]
+	[InlineData("2026-10-27t10:00:00z", "2026-10-27T10:00:00.0000000+00:00")]
+	[InlineData("2026-10-27T10:00:00+0530", "2026-10-27T10:00:00.0000000+05:30")]
+	[InlineData("2026-10-27T10:00:00-05", "2026-10-27T10:00:00.0000000-05:00")]
+	[InlineData("2026-10-27T10:00:00", "2026-10-27T10:00:00.0000000+00:00")]
+	[InlineData("2026-10-27T10:00", "2026-10-27T10:00:00.0000000+00:00")]
+	[InlineData("2026-10-27", "2026-10-27T00:00:00.0000000+00:00")]
+	[InlineData("20261027T100000Z", "2026-10-27T10:00:00.0000000+00:00")]
+	[InlineData("20261027T1000-0500", "2026-10-27T10:00:00.0000000-05:00")]
+	[InlineData("20261027", "2026-10-27T00:00:00.0000000+00:00")]
+	[InlineData("2026/10/27 10:00:00", "2026-10-27T10:00:00.0000000+00:00")]
+	[InlineData("10/27/2026", "2026-10-27T00:00:00.0000000+00:00")]
+	[InlineData("10/27/2026 9:05", "2026-10-27T09:05:00.0000000+00:00")]
+	[InlineData("1/2/2026 10:00:00-05:00", "2026-01-02T10:00:00.0000000-05:00")]
+	public void Reads_iso_and_slash_forms_into_a_date_time_treating_a_missing_offset_as_utc(string text, string expected)
+	{
+		Assert.Equal(expected, Read($$"""{ "moment": "{{text}}" }""").Moment!.Value.ToString("O"));
+	}
+
+	[Theory]
+	[InlineData("10:30", 10, 30, 0, 0)]
+	[InlineData("10:30:15", 10, 30, 15, 0)]
+	[InlineData("10:30:15.250", 10, 30, 15, 250)]
+	[InlineData("10:30:15,250", 10, 30, 15, 250)]
+	[InlineData("103015", 10, 30, 15, 0)]
+	[InlineData("10:30:15Z", 10, 30, 15, 0)]
+	[InlineData("10:30:15-05:00", 10, 30, 15, 0)]
+	[InlineData("9:05", 9, 5, 0, 0)]
+	public void Reads_hours_and_minutes_with_optional_seconds_into_a_time_keeping_the_clock_as_written(string text, int hour, int minute, int second, int millisecond)
+	{
+		Assert.Equal(new TimeOnly(hour, minute, second, millisecond), Read($$"""{ "clock": "{{text}}" }""").Clock);
+	}
+
+	[Fact]
+	public void Turns_an_unparseable_date_or_time_into_null()
+	{
+		var sample = Read("""{ "day": "2026-02-30", "moment": "27/10/2026", "clock": "25:00", "text": "kept" }""");
+
+		Assert.Null(sample.Day);
+		Assert.Null(sample.Moment);
+		Assert.Null(sample.Clock);
+		Assert.Equal("kept", sample.Text);
+	}
+
+	[Theory]
+	[InlineData("""{ "day": "" }""")]
+	[InlineData("""{ "day": "2026-10-27Tjunk" }""")]
+	[InlineData("""{ "day": "2026-1-2" }""")]
+	[InlineData("""{ "day": "2026/13/01" }""")]
+	[InlineData("""{ "moment": "Oct 27, 2026" }""")]
+	[InlineData("""{ "moment": "10/27/2026 10:00 AM" }""")]
+	[InlineData("""{ "moment": "2026-10-27T24:00:00Z" }""")]
+	[InlineData("""{ "moment": "2026-10-27T10:00:00+15:00" }""")]
+	[InlineData("""{ "moment": 1761559200 }""")]
+	[InlineData("""{ "clock": "10:00:60" }""")]
+	[InlineData("""{ "clock": "10:00.5" }""")]
+	public void Turns_a_malformed_date_or_time_into_null(string json)
+	{
+		var sample = Read(json);
+
+		Assert.Null(sample.Day);
+		Assert.Null(sample.Moment);
+		Assert.Null(sample.Clock);
+	}
+
+	[Fact]
+	public void Writes_dates_and_times_in_their_iso_forms()
+	{
+		var sample = new Sample
+		{
+			Day = new DateOnly(2026, 10, 27),
+			Moment = new DateTimeOffset(2026, 10, 27, 10, 0, 0, TimeSpan.FromHours(-5)),
+			Clock = new TimeOnly(10, 30, 15)
+		};
+
+		Assert.Equal("""{"day":"2026-10-27","moment":"2026-10-27T10:00:00-05:00","clock":"10:30:15"}""",
+			JsonSerializer.Serialize(sample, ApiJson.Options));
 	}
 
 	sealed class Holder

@@ -35,6 +35,11 @@
 
 - `ApiWeld.Http`: a lone JSON object where a list is declared reads as a one-item list instead
   of failing the response.
+- `ApiWeld.Http`: dates and times read leniently, in ISO 8601 extended or basic form or as
+  slash dates (`yyyy/M/d`, `M/d/yyyy`). A date takes the date part of a full date-time, a
+  date-time with no offset (or a bare date) is read as UTC, a time keeps its clock time when it
+  carries an offset, and a value that still does not parse reads as `null` instead of failing
+  the response. See the README's "Tolerant JSON".
 - `ApiWeld.Generator`: a part shared by several descriptions at the same path is named by that
   path (`MetadataResponse`) instead of after whichever description had the shortest name.
 - `ApiWeld.Generator`: different shapes that want one name and that the verb cannot separate —
