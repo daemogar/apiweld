@@ -538,4 +538,43 @@ public class PagingTests
 		Assert.Equal(new[] { 0, 1, 2, 3, 4, 6, 7, 8, 9, 10, 11, 12, 13, 15 }, Ids(exception.Rows));
 		Assert.Equal(new[] { "record 5", "record 14" }, exception.Failures.Select(failure => failure.ToString()));
 	}
+
+	// With no total, nothing shows the rows go on, and a server that refuses every offset past its end looks just like this.
+	[Fact]
+	public async Task Ends_without_a_total_after_two_failed_pages_in_a_row()
+	{
+		var handler = Server(rows: 100, pageSize: 4, bad: row => row >= 4);
+
+		var exception = await Assert.ThrowsAsync<ApiPagingException<Row>>(() => Transport(handler).GetAllAsync<Row>(Fours, [], null, TestContext.Current.CancellationToken));
+
+		Assert.Equal(new[] { 0, 1, 2, 3 }, Ids(exception.Rows));
+		Assert.Equal(new[] { "records 4-7", "records 8-11" }, exception.Failures.Select(failure => failure.ToString()));
+
+		// Each failed page, then its two halves.
+		Assert.Equal(new[] { "0", "4", "4", "6", "8", "8", "10" }, Offsets(handler));
+	}
+
+	// A page narrowed down to its bad record still returned rows, so it is no sign the collection has ended.
+	[Fact]
+	public async Task Walks_on_without_a_total_past_two_narrowed_pages_in_a_row()
+	{
+		var handler = Server(rows: 12, pageSize: 4, bad: row => row is 5 or 9);
+
+		var exception = await Assert.ThrowsAsync<ApiPagingException<Row>>(() => Transport(handler).GetAllAsync<Row>(Fours, [], null, TestContext.Current.CancellationToken));
+
+		Assert.Equal(new[] { 0, 1, 2, 3, 4, 6, 7, 8, 10, 11 }, Ids(exception.Rows));
+		Assert.Equal(new[] { "record 5", "record 9" }, exception.Failures.Select(failure => failure.ToString()));
+	}
+
+	// The total proves more rows exist, so a failed page is stepped over and the walk goes on.
+	[Fact]
+	public async Task Steps_over_a_failed_page_when_a_total_is_sent()
+	{
+		var handler = Server(rows: 300, pageSize: 100, total: 300, bad: row => row is >= 100 and < 200);
+
+		var exception = await Assert.ThrowsAsync<ApiPagingException<Row>>(() => Transport(handler).GetAllAsync<Row>(Paged(100), [], null, TestContext.Current.CancellationToken));
+
+		Assert.Equal(Enumerable.Range(0, 100).Concat(Enumerable.Range(200, 100)), Ids(exception.Rows));
+		Assert.Equal("records 100-199", Assert.Single(exception.Failures).ToString());
+	}
 }

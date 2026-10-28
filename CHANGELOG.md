@@ -90,3 +90,6 @@
   such as `/widgets/{id}`) and declares neither paging parameter is a single request again,
   instead of a walk that cost up to three requests for one record. A path that declares offset or
   limit is still paged. See the README's "Page walking".
+- `ApiWeld.Http`: a page walk with no total no longer runs on forever when every later page
+  fails: two pages in a row that fail without yielding a row end the walk. See the README's
+  "Page walking" › "A page that fails".

@@ -408,6 +408,12 @@ failed page by itself, with an explicit `limit`, and keeps halving the side that
   split further — a failure that wide is not one record's fault;
 - the walk then carries on with the page after it, so one bad page does not end the walk.
 
+With a total, the walk steps over a failed page whatever came before it, because the total
+proves more rows exist. Without one, nothing does, and a server that refuses every offset past
+its end looks just like a run of bad pages. So without a total, a second page in a row that
+yielded no rows at all ends the walk. A page narrowed down to its bad records still yielded rows,
+and does not count toward that run.
+
 When the walk ends with records missing, it **throws** `ApiPagingException`, whose `Failures`
 name each record or range and carry the failure behind it. `GetAsync` throws
 `ApiPagingException<T>`, whose `Rows` are every row it did fetch — the rows are in the exception,

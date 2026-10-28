@@ -24,6 +24,7 @@ internal static class PageWalker
 		int? total = null;
 		string? previous = null;
 		var walking = true;
+		var lost = false;
 
 		while (walking)
 		{
@@ -46,6 +47,7 @@ internal static class PageWalker
 				total = page.Total;
 				offset += page.Items.Count;
 				previous = page.Body;
+				lost = false;
 				full = Grown(full, limit, page.Items.Count);
 
 				// A page longer than the limit sent means the server ignored it and does not page; it is the whole answer.
@@ -62,7 +64,10 @@ internal static class PageWalker
 				// The window is stepped over whole: its good records are in hand and its bad ones are reported.
 				offset += step.Span;
 				previous = null;
-				walking = total is not { } count || offset < count;
+
+				// With a total, more rows are known to exist; without one, a second window in a row with no rows is taken as the end.
+				walking = total is { } count ? offset < count : !(lost && step.Rows.Count == 0);
+				lost = step.Rows.Count == 0;
 			}
 		}
 
