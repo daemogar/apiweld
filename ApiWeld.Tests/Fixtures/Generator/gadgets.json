@@ -23,6 +23,29 @@
           }
         }
       }
+    },
+    "/api/gadgets/{code}": {
+      "parameters": [ { "name": "code", "in": "path", "required": true, "schema": { "type": "string" } } ],
+      "get": {
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "code": { "type": "string" },
+                      "dimensions": { "type": "object", "properties": { "width": { "type": "number" }, "height": { "type": "number" } } }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": { "schemas": {} }
