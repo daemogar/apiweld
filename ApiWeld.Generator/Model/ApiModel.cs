@@ -61,6 +61,8 @@ internal sealed class OperationModel
 
 	public string? Accept { get; init; }
 
+	public string? ErrorMediaTypes { get; init; }
+
 	public string? ContentType { get; init; }
 
 	public TypeRef? Response { get; init; }

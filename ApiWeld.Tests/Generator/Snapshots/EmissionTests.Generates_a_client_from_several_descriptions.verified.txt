@@ -660,7 +660,8 @@ public sealed class WidgetsV2Operations
 {
 	static readonly ApiOperation GetOperation = new(HttpMethod.Get, "api/widgets")
 	{
-		Accept = "application/vnd.example.v2+json, application/vnd.example.errors.v1+json",
+		Accept = "application/vnd.example.v2+json",
+		ErrorMediaTypes = "application/vnd.example.errors.v1+json",
 		Version = "2",
 		Paging = new("offset", "limit", "X-Total-Count") { DefaultLimit = 2 },
 		Errors = new Dictionary<int, ApiErrorFactory>
@@ -671,7 +672,8 @@ public sealed class WidgetsV2Operations
 
 	static readonly ApiOperation PostOperation = new(HttpMethod.Post, "api/widgets")
 	{
-		Accept = "application/vnd.example.v2+json, application/vnd.example.errors.v1+json",
+		Accept = "application/vnd.example.v2+json",
+		ErrorMediaTypes = "application/vnd.example.errors.v1+json",
 		ContentType = "application/vnd.example.v2+json",
 		Version = "2",
 		Errors = new Dictionary<int, ApiErrorFactory>

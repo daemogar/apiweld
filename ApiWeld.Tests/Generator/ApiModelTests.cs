@@ -228,7 +228,8 @@ public class ApiModelTests
 		Assert.Equal(new[] { "V11_1" }, node.Versions.Keys);
 		Assert.Equal("11.1", operation.Version);
 		Assert.Equal("application/vnd.example.v11+json", operation.ContentType);
-		Assert.Equal("application/vnd.example.v11.1.0+json, application/vnd.example.errors.v2+json", operation.Accept);
+		Assert.Equal("application/vnd.example.v11.1.0+json", operation.Accept);
+		Assert.Equal("application/vnd.example.errors.v2+json", operation.ErrorMediaTypes);
 		Assert.IsType<ModelRef>(operation.Errors[400]);
 	}
 
@@ -252,7 +253,8 @@ public class ApiModelTests
 		Assert.Equal(new[] { 4, 5 }, operation.ErrorRanges.Keys);
 		Assert.IsType<ModelRef>(operation.ErrorRanges[4]);
 		Assert.IsType<ModelRef>(operation.DefaultError);
-		Assert.Equal("application/json, application/problem+json, application/vnd.example.fallback+json", operation.Accept);
+		Assert.Equal("application/json", operation.Accept);
+		Assert.Equal("application/problem+json, application/vnd.example.fallback+json", operation.ErrorMediaTypes);
 	}
 
 	[Fact]

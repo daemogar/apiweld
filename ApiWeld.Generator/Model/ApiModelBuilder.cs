@@ -149,7 +149,7 @@ internal sealed class ApiModelBuilder
 			: null;
 
 		var errors = Errors(file, document, resource, route, operation);
-		var accept = string.Join(", ", new[] { mediaType }.OfType<string>().Concat(errors.MediaTypes.Where(type => type != mediaType)));
+		var errorTypes = string.Join(", ", errors.MediaTypes.Where(type => type != mediaType));
 		var parameters = Parameters(file, label, document, item, operation, out var pathTypes);
 		var paging = method == "get" && response is ListRef ? Paging(path, document, item, operation, parameters) : null;
 
@@ -167,7 +167,8 @@ internal sealed class ApiModelBuilder
 			VersionMember = member,
 			Source = file,
 			MediaType = mediaType,
-			Accept = accept.Length > 0 ? accept : null,
+			Accept = mediaType,
+			ErrorMediaTypes = errorTypes.Length > 0 ? errorTypes : null,
 			ContentType = body?.MediaType,
 			Response = response,
 			Request = request,
