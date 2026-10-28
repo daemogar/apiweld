@@ -27,8 +27,17 @@ public class SendTests
 	static ApiTransport Transport(FakeHandler handler, ApiClientOptions? options = null, ListLogger? logger = null)
 		=> new(handler.Client(), options ?? new ApiClientOptions(), logger);
 
+	static readonly ApiOperation GetMinor = new(HttpMethod.Get, "api/widgets/{id}")
+	{
+		Accept = "application/vnd.example.v11.1.0+json",
+		Version = "11.1"
+	};
+
 	static Task<Widget?> Send(ApiTransport transport)
 		=> transport.SendAsync<Widget>(Get, transport.CreateRequest(Get, ["1"]));
+
+	static Task<Widget?> SendMinor(ApiTransport transport)
+		=> transport.SendAsync<Widget>(GetMinor, transport.CreateRequest(GetMinor, ["1"]));
 
 	[Fact]
 	public async Task Reads_a_success_body()
@@ -173,6 +182,28 @@ public class SendTests
 		});
 
 		Assert.Equal("w", (await Send(Transport(handler)))?.Name);
+	}
+
+	[Fact]
+	public async Task Reads_a_newer_minor_of_the_same_major_with_a_warning()
+	{
+		var handler = new FakeHandler((_, _) => FakeHandler.Json("""{ "name": "w" }""", "application/vnd.example.v11.4.0+json"));
+		var logger = new ListLogger();
+
+		var widget = await SendMinor(Transport(handler, logger: logger));
+
+		Assert.Equal("w", widget?.Name);
+		Assert.Equal("Warning: GET api/widgets/{id} asked for version 11.1 but the response is version 11.4, a newer version of the same major; it is read.", Assert.Single(logger.Messages));
+	}
+
+	[Fact]
+	public async Task Throws_when_the_response_is_another_major()
+	{
+		var handler = new FakeHandler((_, _) => FakeHandler.Json("{}", "application/vnd.example.v12.0.0+json"));
+
+		var exception = await Assert.ThrowsAsync<MediaTypeMismatchException>(() => SendMinor(Transport(handler)));
+
+		Assert.Equal(("11.1", "12"), (exception.Requested, exception.Received));
 	}
 
 	[Fact]

@@ -33,6 +33,13 @@
 
 ### Fixed
 
+- `ApiWeld.Generator`: when a description's `info.version` is a newer version of the same major
+  than all of its media types, `info.version` is pinned. `Accept`, the version check and the
+  member name (`V11_4`) all use it, and the disagreement is still reported as a warning. See the
+  README's "Paths and versions".
+- `ApiWeld.Http`: a response carrying a newer version of the same major than the one asked for is
+  read with a logged warning instead of throwing `MediaTypeMismatchException`. A different major
+  still throws. See the README's "Version checking".
 - `ApiWeld.Http` and `ApiWeld.Generator`: `Accept` carries only the pinned success media type.
   Listing the error media types after it made servers that refuse a multi-value `Accept` answer
   every request with 405. Generated operations now carry the error types as `ErrorMediaTypes`,

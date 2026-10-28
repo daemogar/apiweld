@@ -195,6 +195,32 @@ public class ApiModelTests
 	}
 
 	[Fact]
+	public void Pins_info_version_when_it_is_a_newer_minor_than_the_media_types()
+	{
+		var (model, diagnostics) = Descriptions.Build(Plain, ("widgets.json", Descriptions.Document($$"""
+			{ "/api/widgets": { "get": {{Descriptions.Returns("application/vnd.example.v11.1.0+json", Descriptions.Things)}} },
+			  "/api/widgets/{id}": { "get": {{Descriptions.Returns("application/vnd.example.v11.1.0+json", Descriptions.Thing)}} } }
+			""", version: "11.4.0")));
+
+		var get = Only(model, "V11_4", "Get", "widgets", "{}");
+
+		Assert.Equal(("11.4", "application/vnd.example.v11.4.0+json"), (get.Version, get.Accept));
+		Assert.Equal(new[] { "V11_4" }, Descriptions.Node(model, "widgets").Versions.Keys);
+		Assert.Single(diagnostics, d => d.Message.Contains("info.version says 11.4") && d.Message.Contains("info.version is used"));
+	}
+
+	[Fact]
+	public void Keeps_the_media_types_when_info_version_is_another_major()
+	{
+		var (model, diagnostics) = Descriptions.Build(Plain, ("widgets.json", Descriptions.Document($$"""
+			{ "/api/widgets/{id}": { "get": {{Descriptions.Returns("application/vnd.example.v11.1.0+json", Descriptions.Thing)}} } }
+			""", version: "12.0.0")));
+
+		Assert.Equal("application/vnd.example.v11.1.0+json", Only(model, "V11_1", "Get", "widgets", "{}").Accept);
+		Assert.Single(diagnostics, d => d.Message.Contains("info.version says 12") && d.Message.Contains("the media types are used"));
+	}
+
+	[Fact]
 	public void Gives_a_bodyless_operation_the_version_its_description_uses()
 	{
 		var (model, _) = Descriptions.Build(Plain, ("widgets.json", Descriptions.Document($$"""

@@ -157,8 +157,14 @@ version on one merged path is an error, and so is a segment that mixes text and 
 as `{id}.json` or `{from}-{to}`: every parameter must fill a whole segment. A path that carries a
 query string or fragment, such as `/widgets?kind=a`, is an error too.
 
-An operation's version is read from the media type of its success response — never from the
-description's `info.version`, which is only reported when it disagrees. When a response
+An operation's version is read from the media type of its success response, and the
+description's `info.version` is reported when it disagrees. One disagreement is resolved the
+other way: when `info.version` is a newer version of the same major than every media type in
+the description (`11.4` against `v11.1.0`), the media types are taken to be stale and
+`info.version` is pinned instead. The success media type is rewritten to carry it
+(`v11.4.0`), so both the `Accept` header and the version check use it, and the member is named
+after it (`V11_4`). The warning is still reported. A different major, or a mix of versions in
+which any one is not older, keeps the media types. When a response
 declares several media types, the most specific versioned JSON type wins over plain
 `application/json`. The version member sits just before the verbs:
 `Api.Widgets[id].V2.GetAsync()`. An operation whose success response carries no versioned media
@@ -334,7 +340,10 @@ When a success response carries a *different* version, the runtime throws
 generated for. The version is read from `Content-Type`, or from an `X-Media-Type` header when
 `Content-Type` names none, since some servers answer plain `application/json` and name the
 versioned media type there. A response that names no version in either place is read as
-normal. Setting `VersionMismatch` to `Warn` logs a warning instead of throwing.
+normal. A response carrying a newer version of the same major than the one asked for (`11.4`
+for `11.1`) is read too, with a logged warning, because some servers answer the latest minor
+of the requested major whatever minor was asked for. A different major, or an older version,
+is a mismatch. Setting `VersionMismatch` to `Warn` logs a warning instead of throwing.
 
 A non-2xx response throws `ApiResponseException`. When the description declares a body for that
 status, the exception is the generic `ApiResponseException<TError>` with the body read into

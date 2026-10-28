@@ -65,6 +65,14 @@ public sealed partial class ApiTransport
 		if (received is null || received == operation.Version)
 			return;
 
+		// Some servers answer the latest minor of the major asked for; see README.md, "Version checking".
+		if (MediaTypeVersion.IsNewerInMajor(received, operation.Version))
+		{
+			Logger.LogWarning("{Method} {Template} asked for version {Requested} but the response is version {Received}, a newer version of the same major; it is read.",
+				operation.Method, operation.Template, operation.Version, received);
+			return;
+		}
+
 		if (ClientOptions.VersionMismatch == VersionMismatchBehavior.Throw)
 			throw new MediaTypeMismatchException(operation.Method, operation.Template, operation.Version, received);
 
