@@ -1,4 +1,4 @@
-﻿warning: widgets.json: info.version says 2.1 but its media types say 2; the media types are used.
+﻿warning: widgets.json: info.version says 3 but its media types say 2; the media types are used.
 warning: widgets.json: path parameter {id} in /api/widgets/{id} is Guid, but the same position is string elsewhere; its indexer takes string.
 
 ==== ExampleClient.g.cs ====

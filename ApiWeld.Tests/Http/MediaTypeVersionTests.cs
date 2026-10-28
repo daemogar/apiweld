@@ -49,4 +49,28 @@ public class MediaTypeVersionTests
 	{
 		Assert.Equal(expected, MediaTypeVersion.MemberName(version));
 	}
+
+	[Theory]
+	[InlineData("11.4", "11.1", true)]
+	[InlineData("11.4", "11", true)]
+	[InlineData("11.1.2", "11.1", true)]
+	[InlineData("11.10", "11.9", true)]
+	[InlineData("11.1", "11.1", false)]
+	[InlineData("11.1", "11.4", false)]
+	[InlineData("12", "11.1", false)]
+	[InlineData("11.4.0-beta", "11.1", false)]
+	public void Tells_a_newer_version_within_the_same_major(string candidate, string baseline, bool expected)
+	{
+		Assert.Equal(expected, MediaTypeVersion.IsNewerInMajor(candidate, baseline));
+	}
+
+	[Theory]
+	[InlineData("application/vnd.example.v11.1.0+json", "11.4", "application/vnd.example.v11.4.0+json")]
+	[InlineData("application/vnd.example.v11+json", "11.4", "application/vnd.example.v11.4+json")]
+	[InlineData("application/vnd.example.v11.1.0+json; charset=utf-8", "11.4", "application/vnd.example.v11.4.0+json; charset=utf-8")]
+	[InlineData("application/json", "11.4", "application/json")]
+	public void Rewrites_the_version_token_keeping_its_number_of_parts(string mediaType, string version, string expected)
+	{
+		Assert.Equal(expected, MediaTypeVersion.WithVersion(mediaType, version));
+	}
 }

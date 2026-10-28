@@ -114,15 +114,19 @@ internal sealed class ApiModelBuilder
 
 		(string Version, string MediaType)? inherited = versions.Count == 1 ? versions[0] : null;
 
-		if (JsonText.String(document["info"], "version") is { } declared && versions.Count > 0
-			&& versions.All(pair => pair.Version != MediaTypeVersion.Normalize(declared)))
-			diagnostics.Warn($"{file}: info.version says {MediaTypeVersion.Normalize(declared)} but its media types say {string.Join(", ", versions.Select(pair => pair.Version))}; the media types are used.");
+		var declared = JsonText.String(document["info"], "version") is { } text ? MediaTypeVersion.Normalize(text) : null;
+
+		// A newer minor in info.version than every media type marks the media types as stale; see README.md, "Paths and versions".
+		var pinned = declared is not null && versions.Count > 0 && versions.All(pair => MediaTypeVersion.IsNewerInMajor(declared, pair.Version)) ? declared : null;
+
+		if (declared is not null && versions.Count > 0 && versions.All(pair => pair.Version != declared))
+			diagnostics.Warn($"{file}: info.version says {declared} but its media types say {string.Join(", ", versions.Select(pair => pair.Version))}; {(pinned is null ? "the media types are" : "info.version is")} used.");
 
 		foreach (var (path, item, method, operation) in operations)
-			AddOperation(file, document, resource, inherited, path, item, method, operation);
+			AddOperation(file, document, resource, inherited, pinned, path, item, method, operation);
 	}
 
-	void AddOperation(string file, JsonObject document, string resource, (string Version, string MediaType)? inherited,
+	void AddOperation(string file, JsonObject document, string resource, (string Version, string MediaType)? inherited, string? pinned,
 		string path, JsonObject item, string method, JsonObject operation)
 	{
 		var verb = Words.Pascal(method);
@@ -136,7 +140,8 @@ internal sealed class ApiModelBuilder
 		if (picked is null && success?["content"] is JsonObject { Count: > 0 })
 			diagnostics.Warn($"{file}: {label} declares no JSON response; it is generated without a response body.");
 
-		var mediaType = picked?.MediaType ?? inherited?.MediaType;
+		var described = picked?.MediaType ?? inherited?.MediaType;
+		var mediaType = pinned is not null && described is not null ? MediaTypeVersion.WithVersion(described, pinned) : described;
 		var version = MediaTypeVersion.Read(mediaType);
 		var member = MediaTypeVersion.MemberName(version);
 		var route = RouteName(path);
@@ -149,7 +154,7 @@ internal sealed class ApiModelBuilder
 			: null;
 
 		var errors = Errors(file, document, resource, route, operation);
-		var errorTypes = string.Join(", ", errors.MediaTypes.Where(type => type != mediaType));
+		var errorTypes = string.Join(", ", errors.MediaTypes.Where(type => type != described));
 		var parameters = Parameters(file, label, document, item, operation, out var pathTypes);
 		var paging = method == "get" && response is ListRef ? Paging(path, document, item, operation, parameters) : null;
 
