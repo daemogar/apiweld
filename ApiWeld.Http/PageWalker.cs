@@ -14,28 +14,54 @@ internal delegate Task<PageFetch<T>> PageFetcher<T>(int offset, int? limit, Canc
 internal static class PageWalker
 {
 	/// <summary>Walks every page, sending <paramref name="limit"/> if set and expecting <paramref name="full"/> rows a page, or what the first page holds.</summary>
-	public static async IAsyncEnumerable<T> WalkAsync<T>(ApiOperation operation, PageFetcher<T> fetch, int? limit, int? full, int narrowing,
+	public static async IAsyncEnumerable<T> WalkAsync<T>(ApiOperation operation, PageFetcher<T> fetch, int? limit, int? full, int narrowing, int cap,
 		[EnumeratorCancellation] CancellationToken cancellationToken)
 	{
 		var paging = operation.Paging!;
 		var failures = new List<PageFailure>();
+		var requests = new Requests(cap);
 		var offset = 0;
 		int? size = null;
 		int? total = null;
 		string? previous = null;
 		var walking = true;
+		var lost = false;
+
+		fetch = requests.Counted(fetch);
 
 		while (walking)
 		{
 			var asked = Asked(paging, offset, limit, full);
-			var step = await StepAsync(fetch, offset, asked, size, total, narrowing, paging.Limit is not null, failures, cancellationToken).ConfigureAwait(false);
+			Step<T> step;
+
+			try
+			{
+				step = await StepAsync(fetch, offset, asked, size, total, narrowing, paging.Limit is not null, requests, failures, cancellationToken).ConfigureAwait(false);
+			}
+			catch (CapReachedException)
+			{
+				failures.Add(Capped(offset, total, cap));
+				break;
+			}
 
 			if (step.Page is { } page)
 			{
 				if (page.Items.Count == 0)
 					break;
 
-				if (await GuardAsync(page, previous, offset, asked, fetch, paging.Undeclared, cancellationToken).ConfigureAwait(false))
+				bool repeated;
+
+				try
+				{
+					repeated = await GuardAsync(page, previous, offset, asked, fetch, paging.Undeclared, cancellationToken).ConfigureAwait(false);
+				}
+				catch (CapReachedException)
+				{
+					failures.Add(Capped(offset, total, cap));
+					break;
+				}
+
+				if (repeated)
 					break;
 
 				foreach (var item in page.Items)
@@ -46,6 +72,7 @@ internal static class PageWalker
 				total = page.Total;
 				offset += page.Items.Count;
 				previous = page.Body;
+				lost = false;
 				full = Grown(full, limit, page.Items.Count);
 
 				// A page longer than the limit sent means the server ignored it and does not page; it is the whole answer.
@@ -62,13 +89,21 @@ internal static class PageWalker
 				// The window is stepped over whole: its good records are in hand and its bad ones are reported.
 				offset += step.Span;
 				previous = null;
-				walking = total is not { } count || offset < count;
+
+				// With a total, more rows are known to exist; without one, a second window in a row with no rows is taken as the end.
+				walking = total is { } count ? offset < count : !(lost && step.Rows.Count == 0);
+				lost = step.Rows.Count == 0;
 			}
 		}
 
 		if (failures.Count > 0)
 			throw new ApiPagingException(operation, failures);
 	}
+
+	/// <summary>The rows a walk never reached because it ran out of requests: up to the total, or, without one, an unknown extent.</summary>
+	static PageFailure Capped(int offset, int? total, int cap)
+		=> new(offset, total is { } count ? Math.Max(count - offset, 0) : 0,
+			new InvalidOperationException($"The walk made its {cap} requests (ApiClientOptions.MaxPageRequests) before reaching the end of the rows."));
 
 	/// <summary>The limit to ask a window for: the one sent, or, with no offset to move, the page size once a page has shown it.</summary>
 	public static int? Asked(ApiPaging paging, int offset, int? limit, int? full)
@@ -85,7 +120,7 @@ internal static class PageWalker
 
 	/// <summary>The next page; or, when a failure can be narrowed, the records of that window the server will still answer for.</summary>
 	static async Task<Step<T>> StepAsync<T>(PageFetcher<T> fetch, int offset, int? limit, int? size, int? total, int narrowing, bool splittable,
-		List<PageFailure> failures, CancellationToken cancellationToken)
+		Requests requests, List<PageFailure> failures, CancellationToken cancellationToken)
 	{
 		try
 		{
@@ -99,7 +134,7 @@ internal static class PageWalker
 
 			// With no limit parameter, half a window cannot be asked for, so the window is reported whole.
 			if (splittable)
-				await NarrowAsync(fetch, offset, span, error, rows, failures, new Budget(narrowing), cancellationToken).ConfigureAwait(false);
+				await NarrowAsync(fetch, offset, span, error, rows, failures, new Budget(narrowing, requests), cancellationToken).ConfigureAwait(false);
 			else
 				failures.Add(new(offset, span, error));
 
@@ -162,15 +197,15 @@ internal static class PageWalker
 	/// <summary>Whether a failure could be one bad record: a response the server refused, or a body that would not read.</summary>
 	static bool Narrowable(Exception error) => error is ApiResponseException or JsonException;
 
-	/// <summary>The extra requests one failed window may spend narrowing itself.</summary>
-	sealed class Budget(int requests)
+	/// <summary>The extra requests one failed window may spend narrowing itself, within what the walk has left.</summary>
+	sealed class Budget(int requests, Requests walk)
 	{
 		int remaining = requests;
 
-		/// <summary>Spends <paramref name="count"/> requests, or refuses when that many are not left.</summary>
+		/// <summary>Spends <paramref name="count"/> requests, or refuses when that many are not left here or in the walk.</summary>
 		public bool TrySpend(int count)
 		{
-			if (remaining < count)
+			if (remaining < count || !walk.Left(count))
 				return false;
 
 			remaining -= count;
@@ -178,6 +213,29 @@ internal static class PageWalker
 			return true;
 		}
 	}
+
+	/// <summary>Every request one walk makes, held to its cap; a cap of 0 is none.</summary>
+	sealed class Requests(int cap)
+	{
+		int made;
+
+		/// <summary>Whether <paramref name="count"/> more requests fit under the cap.</summary>
+		public bool Left(int count) => cap <= 0 || made + count <= cap;
+
+		/// <summary>The fetch, counting each request and refusing one past the cap.</summary>
+		public PageFetcher<T> Counted<T>(PageFetcher<T> fetch) => (offset, limit, cancellationToken) =>
+		{
+			if (!Left(1))
+				throw new CapReachedException();
+
+			made++;
+
+			return fetch(offset, limit, cancellationToken);
+		};
+	}
+
+	/// <summary>A walk out of requests; never narrowed, and caught by the walk itself.</summary>
+	sealed class CapReachedException : Exception;
 
 	/// <summary>
 	/// Checks for a server ignoring the offset: a page that repeats the one before it, as does the page one row later.

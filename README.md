@@ -391,9 +391,11 @@ walk then requests the page one row later. A server that honors the offset answe
 differently, unless every row in the run is identical. It throws only when the shifted page
 matches as well, and the operation declares an offset.
 
-There is no request cap, so a large result set is never cut short. The total, or a page that is
-not full, always ends the walk. `limit` stays on the query object and acts as the page size; the
-offset is owned by the walk and does not appear there.
+The total, or a page that is not full, ends the walk. As a backstop, `MaxPageRequests` caps the
+requests one walk may make, narrowing and the repeat check included: 1,000 by default, 0 for no
+cap. A walk that reaches it ends there and reports the rows it did not reach as one failure (see
+"A page that fails"), so the rows it did fetch are kept. `limit` stays on the query object and
+acts as the page size; the offset is owned by the walk and does not appear there.
 
 #### A page that fails
 
@@ -408,8 +410,16 @@ failed page by itself, with an explicit `limit`, and keeps halving the side that
   split further — a failure that wide is not one record's fault;
 - the walk then carries on with the page after it, so one bad page does not end the walk.
 
+With a total, the walk steps over a failed page whatever came before it, because the total
+proves more rows exist. Without one, nothing does, and a server that refuses every offset past
+its end looks just like a run of bad pages. So without a total, a second page in a row that
+yielded no rows at all ends the walk. A page narrowed down to its bad records still yielded rows,
+and does not count toward that run.
+
 When the walk ends with records missing, it **throws** `ApiPagingException`, whose `Failures`
-name each record or range and carry the failure behind it. `GetAsync` throws
+name each record or range and carry the failure behind it. A walk ended by `MaxPageRequests`
+adds a last failure from where it stopped: up to the total, or with a `Count` of 0 ("records
+from N") when there is none. `GetAsync` throws
 `ApiPagingException<T>`, whose `Rows` are every row it did fetch — the rows are in the exception,
 not lost. `EnumerateAsync` has already yielded those rows, so it throws the non-generic one once
 the walk is over. A page fetched by hand with `GetPagedAsync` is never narrowed; its failure
@@ -421,7 +431,8 @@ on. An operation with no limit parameter cannot ask for half a window, so its fa
 reported as a range at once, with no extra requests. A failure on the **first** page, before any
 page has been seen, throws as it is, as does any failure that is not an error status or an
 unreadable body (a timeout, a cancelled call, a version mismatch). `PageNarrowingRequests` is the extra requests one
-failed page may spend, 32 by default and 0 to turn narrowing off; each halving costs two. A
+failed page may spend, 32 by default and 0 to turn narrowing off; each halving costs two, and
+narrowing never spends past `MaxPageRequests` — a page it cannot afford is reported as a range. A
 server that answers a limited request with more rows than were asked for is one that ignores
 `limit`, and its page is reported as a range.
 

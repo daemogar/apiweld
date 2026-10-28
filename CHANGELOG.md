@@ -20,7 +20,7 @@
   request from a generated operation description, pins the versioned `Accept` media type and
   throws when a response names another version, reads declared error bodies into typed
   exceptions, walks paged operations (`GetAsync`, `EnumerateAsync`, `GetPagedAsync`) with a
-  repeat guard instead of a request cap, reads mismatched JSON kinds tolerantly, trades an API
+  repeat guard and a per-walk request cap, reads mismatched JSON kinds tolerantly, trades an API
   key for a cached bearer token with one retry on 401, and registers a client with
   `AddApiWeldClient<TClient>`. See the README's "The runtime" section.
 - `ApiWeld.Generator` and `apiweld generate <manifest>`: generate one typed C# client and one
@@ -90,3 +90,8 @@
   such as `/widgets/{id}`) and declares neither paging parameter is a single request again,
   instead of a walk that cost up to three requests for one record. A path that declares offset or
   limit is still paged. See the README's "Page walking".
+- `ApiWeld.Http`: a page walk can no longer run forever. With no total, two pages in a row that
+  fail without yielding a row end the walk. Every walk is capped by the new
+  `ApiClientOptions.MaxPageRequests` (1,000 by default, 0 for no cap), narrowing included; a walk
+  that hits the cap throws `ApiPagingException` with the rows it fetched and a last failure naming
+  where it stopped. See the README's "Page walking" › "A page that fails".

@@ -1,17 +1,22 @@
 ﻿namespace ApiWeld.Http;
 
-/// <summary>A record, or a range of records, a paged walk could not fetch.</summary>
+/// <summary>A record, or a range of records, a paged walk could not fetch; a <see cref="Count"/> of 0 is every record from <see cref="Offset"/> on.</summary>
 /// <remarks>See README.md, "Page walking".</remarks>
 public sealed record PageFailure(int Offset, int Count, Exception Error)
 {
 	/// <summary>Whether the failure was narrowed to the one record at <see cref="Offset"/>.</summary>
 	public bool IsRecord => Count == 1;
 
-	/// <summary>The last record the failure covers.</summary>
+	/// <summary>The last record the failure covers; meaningless when <see cref="Count"/> is 0.</summary>
 	public int Last => Offset + Count - 1;
 
 	/// <summary>The record or range, as the exception message names it.</summary>
-	public override string ToString() => IsRecord ? $"record {Offset}" : $"records {Offset}-{Last}";
+	public override string ToString() => Count switch
+	{
+		0 => $"records from {Offset}",
+		1 => $"record {Offset}",
+		_ => $"records {Offset}-{Last}"
+	};
 }
 
 /// <summary>A paged walk that returned its other records but could not fetch every one of them.</summary>

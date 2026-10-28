@@ -23,6 +23,12 @@ public class ApiClientOptions
 	/// </summary>
 	public int PageNarrowingRequests { get; set; } = 32;
 
+	/// <summary>
+	/// The most requests one page walk may make, narrowing included, before it ends and reports the rest
+	/// as not fetched; 0 removes the cap. See README.md, "Page walking".
+	/// </summary>
+	public int MaxPageRequests { get; set; } = 1000;
+
 	/// <summary>Trades a key for a bearer token before each request; off when null.</summary>
 	public TokenExchangeOptions? TokenExchange { get; set; }
 }
