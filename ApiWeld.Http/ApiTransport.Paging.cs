@@ -36,6 +36,7 @@ public sealed partial class ApiTransport
 			sent,
 			Full(paging, sent),
 			ClientOptions.PageNarrowingRequests,
+			ClientOptions.MaxPageRequests,
 			cancellationToken);
 	}
 

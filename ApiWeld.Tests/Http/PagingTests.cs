@@ -59,6 +59,8 @@ public class PagingTests
 
 	static ApiTransport Transport(FakeHandler handler, int narrowing) => new(handler.Client(), new ApiClientOptions { PageNarrowingRequests = narrowing });
 
+	static ApiTransport Capped(FakeHandler handler, int cap) => new(handler.Client(), new ApiClientOptions { MaxPageRequests = cap });
+
 	static List<string> Offsets(FakeHandler handler) => Sent(handler, "offset");
 
 	static List<string> Sent(FakeHandler handler, string name)
@@ -566,6 +568,22 @@ public class PagingTests
 		Assert.Equal(new[] { "record 5", "record 9" }, exception.Failures.Select(failure => failure.ToString()));
 	}
 
+	// Pages 4-7, 12-15, 20-23… fail whole and the others answer, so no run of failures ever ends the walk.
+	[Fact]
+	public async Task Ends_a_walk_at_the_request_cap()
+	{
+		var handler = Server(rows: 1000, pageSize: 4, bad: row => row / 4 % 2 == 1);
+
+		var exception = await Assert.ThrowsAsync<ApiPagingException<Row>>(() => Capped(handler, 10).GetAllAsync<Row>(Fours, [], null, TestContext.Current.CancellationToken));
+
+		Assert.Equal(10, handler.Requests.Count);
+		Assert.Equal(new[] { 0, 1, 2, 3, 8, 9, 10, 11, 16, 17, 18, 19 }, Ids(exception.Rows));
+
+		// The tenth request is the page at 20; with no request left to narrow it, it is reported whole.
+		Assert.Equal(new[] { "records 4-7", "records 12-15", "records 20-23", "records from 24" }, exception.Failures.Select(failure => failure.ToString()));
+		Assert.Contains(nameof(ApiClientOptions.MaxPageRequests), exception.Failures[^1].Error.Message);
+	}
+
 	// The total proves more rows exist, so a failed page is stepped over and the walk goes on.
 	[Fact]
 	public async Task Steps_over_a_failed_page_when_a_total_is_sent()
@@ -576,5 +594,28 @@ public class PagingTests
 
 		Assert.Equal(Enumerable.Range(0, 100).Concat(Enumerable.Range(200, 100)), Ids(exception.Rows));
 		Assert.Equal("records 100-199", Assert.Single(exception.Failures).ToString());
+	}
+
+	[Fact]
+	public async Task Caps_a_walk_at_a_thousand_requests_by_default()
+	{
+		var handler = Server(rows: 1100, pageSize: 1);
+
+		var exception = await Assert.ThrowsAsync<ApiPagingException<Row>>(() => Transport(handler).GetAllAsync<Row>(Paged(1), [], null, TestContext.Current.CancellationToken));
+
+		Assert.Equal(1000, handler.Requests.Count);
+		Assert.Equal(1000, exception.Rows.Count);
+		Assert.Equal("records from 1000", Assert.Single(exception.Failures).ToString());
+	}
+
+	[Fact]
+	public async Task Walks_past_a_thousand_requests_when_the_cap_is_off()
+	{
+		var handler = Server(rows: 1100, pageSize: 1);
+
+		var rows = await Capped(handler, 0).GetAllAsync<Row>(Paged(1), [], null, TestContext.Current.CancellationToken);
+
+		Assert.Equal(1100, rows.Count);
+		Assert.Equal(1101, handler.Requests.Count);
 	}
 }
