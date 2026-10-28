@@ -337,10 +337,12 @@ then its range (`4XX` or `5XX`), then `default`.
 
 ### Page walking
 
-Every `GET` that returns a list is paged. Its `GetAsync` returns every row, `EnumerateAsync`
-streams rows as pages arrive, and `GetPagedAsync` returns one `Page<T>` whose `NextAsync`
-fetches the page after it. The offset and limit parameters are named by the manifest's `paging`
-settings.
+Every `GET` that returns a list is paged, except one at an item path (a path ending in a
+parameter, such as `/widgets/{id}`) that declares neither paging parameter: that is one record's
+lookup, so its `GetAsync` is a single request. A paged `GetAsync` returns every row,
+`EnumerateAsync` streams rows as pages arrive, and `GetPagedAsync` returns one `Page<T>` whose
+`NextAsync` fetches the page after it. The offset and limit parameters are named by the
+manifest's `paging` settings.
 
 The walk sends a limit only when the caller sets one, through the query object or
 `GetPagedAsync`, so a client's page size otherwise stays the server's business. A described
@@ -378,7 +380,8 @@ How each operation is walked depends on which parameters its description declare
   row up to the end of the next page (`limit` 4, then 6, for pages of 2), keeping only the rows
   past the ones already returned. The first request sends a limit only when the caller set one. Each request repeats the rows before it, which costs bandwidth
   but loses nothing.
-- **Neither:** the walk sends the manifest's offset name anyway. A server that does not page
+- **Neither:** an item path is not paged at all (see above). Elsewhere, the walk sends the
+  manifest's offset name anyway. A server that does not page
   answers every request with the same rows, so the walk ends after the first page, or, when that
   page happened to be full, after the repeat check below finds it repeated. That repeat does not
   throw here, because nothing promised the offset would be honored.

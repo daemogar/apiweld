@@ -86,3 +86,7 @@
   size. No limit is sent that the caller did not set, and the walk continues while pages come
   back full. A page longer than a limit the caller sent is the whole answer. Every `GET` that returns a list is now paged, whichever of offset and limit it declares,
   if either. See the README's "Page walking".
+- `ApiWeld.Generator`: a `GET` that returns a list at an item path (one ending in a parameter,
+  such as `/widgets/{id}`) and declares neither paging parameter is a single request again,
+  instead of a walk that cost up to three requests for one record. A path that declares offset or
+  limit is still paged. See the README's "Page walking".

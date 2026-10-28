@@ -151,7 +151,7 @@ internal sealed class ApiModelBuilder
 		var errors = Errors(file, document, resource, route, operation);
 		var accept = string.Join(", ", new[] { mediaType }.OfType<string>().Concat(errors.MediaTypes.Where(type => type != mediaType)));
 		var parameters = Parameters(file, label, document, item, operation, out var pathTypes);
-		var paging = method == "get" && response is ListRef ? Paging(document, item, operation, parameters) : null;
+		var paging = method == "get" && response is ListRef ? Paging(path, document, item, operation, parameters) : null;
 
 		if (paging is not null)
 			parameters.RemoveAll(p => p.In == "query" && p.Name == manifest.Paging.Offset);
@@ -303,14 +303,14 @@ internal sealed class ApiModelBuilder
 		return parameters;
 	}
 
-	/// <summary>How a list is paged: by the offset and limit it declares, or by the manifest's names when it declares neither.</summary>
-	PagedModel Paging(JsonObject document, JsonObject item, JsonObject operation, List<QueryParameter> parameters)
+	/// <summary>How a list is paged: by the offset and limit it declares, or by the manifest's names when it declares neither and is not an item path.</summary>
+	PagedModel? Paging(string path, JsonObject document, JsonObject item, JsonObject operation, List<QueryParameter> parameters)
 	{
 		var offset = parameters.Any(p => p.In == "query" && p.Name == manifest.Paging.Offset);
 		var limit = parameters.Any(p => p.In == "query" && p.Name == manifest.Paging.Limit);
 
 		if (!offset && !limit)
-			return new(true, true, null, Undeclared: true);
+			return IsParameter(path.Split('/', StringSplitOptions.RemoveEmptyEntries).LastOrDefault() ?? "") ? null : new(true, true, null, Undeclared: true);
 
 		// An operation's own declaration overrides its path's, so it is read last.
 		var schema = new[] { item["parameters"], operation["parameters"] }
