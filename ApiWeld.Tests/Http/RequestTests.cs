@@ -159,17 +159,33 @@ public class RequestTests
 	{
 		var put = new ApiOperation(HttpMethod.Put, "api/widgets/{id}")
 		{
-			Accept = "application/vnd.example.v2+json, application/vnd.example.errors.v1+json",
+			Accept = "application/vnd.example.v2+json",
+			ErrorMediaTypes = "application/vnd.example.errors.v1+json",
 			ContentType = "application/vnd.example.v2.1+json"
 		};
 
 		using var request = Transport.CreateRequest(put, ["9"], body: new Dictionary<string, object?> { ["name"] = "n", ["gone"] = null });
 
+		Assert.Equal("application/vnd.example.v2+json", Assert.Single(request.Headers.GetValues("Accept")));
+		Assert.Equal("application/vnd.example.v2.1+json", request.Content!.Headers.ContentType!.ToString());
+		Assert.Equal("""{"name":"n","gone":null}""", await request.Content.ReadAsStringAsync(TestContext.Current.CancellationToken));
+	}
+
+	[Fact]
+	public void Adds_the_error_media_types_to_accept_when_configured()
+	{
+		var transport = new ApiTransport(new HttpClient(), new ApiClientOptions { AcceptErrorMediaTypes = true });
+		var get = new ApiOperation(HttpMethod.Get, "api/widgets")
+		{
+			Accept = "application/vnd.example.v2+json",
+			ErrorMediaTypes = "application/vnd.example.errors.v1+json"
+		};
+
+		using var request = transport.CreateRequest(get, []);
+
 		Assert.Equal(
 			new[] { "application/vnd.example.v2+json", "application/vnd.example.errors.v1+json" },
 			request.Headers.GetValues("Accept"));
-		Assert.Equal("application/vnd.example.v2.1+json", request.Content!.Headers.ContentType!.ToString());
-		Assert.Equal("""{"name":"n","gone":null}""", await request.Content.ReadAsStringAsync(TestContext.Current.CancellationToken));
 	}
 
 	[Fact]

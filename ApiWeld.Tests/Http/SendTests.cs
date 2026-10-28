@@ -148,6 +148,34 @@ public class SendTests
 	}
 
 	[Fact]
+	public async Task Throws_when_a_media_type_header_names_another_version_behind_plain_json()
+	{
+		var handler = new FakeHandler((_, _) =>
+		{
+			var response = FakeHandler.Json("{}", "application/json; charset=utf-8");
+			response.Headers.Add("X-Media-Type", "application/vnd.example.v3+json");
+			return response;
+		});
+
+		var exception = await Assert.ThrowsAsync<MediaTypeMismatchException>(() => Send(Transport(handler)));
+
+		Assert.Equal(("2", "3"), (exception.Requested, exception.Received));
+	}
+
+	[Fact]
+	public async Task Reads_plain_json_with_a_media_type_header_naming_the_same_version()
+	{
+		var handler = new FakeHandler((_, _) =>
+		{
+			var response = FakeHandler.Json("""{ "name": "w" }""", "application/json; charset=utf-8");
+			response.Headers.Add("X-Media-Type", "application/vnd.example.v2.0.0+json");
+			return response;
+		});
+
+		Assert.Equal("w", (await Send(Transport(handler)))?.Name);
+	}
+
+	[Fact]
 	public async Task Warns_instead_of_throwing_when_configured()
 	{
 		var handler = new FakeHandler((_, _) => FakeHandler.Json("""{ "name": "w" }""", "application/vnd.example.v3+json"));

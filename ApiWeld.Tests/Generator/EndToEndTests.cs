@@ -103,7 +103,7 @@ public class EndToEndTests
 		Assert.Single(server.Requests, r => r.Request.RequestUri!.AbsolutePath == "/api/gadgets/g");
 
 		var list = server.Requests.First(r => r.Request.Method == HttpMethod.Get && r.Request.RequestUri!.AbsolutePath == "/api/widgets").Request;
-		Assert.Equal("application/vnd.example.v2+json, application/vnd.example.errors.v1+json", string.Join(", ", list.Headers.Accept));
+		Assert.Equal("application/vnd.example.v2+json", Assert.Single(list.Headers.Accept).ToString());
 		Assert.Contains("criteria=%7B%7D", list.RequestUri!.Query);
 
 		var delete = server.Requests.Single(r => r.Request.Method == HttpMethod.Delete).Request;
@@ -116,6 +116,6 @@ public class EndToEndTests
 		var post = server.Requests.Single(r => r.Request.Method == HttpMethod.Post);
 		Assert.Equal("application/vnd.example.v2+json", post.ContentType);
 		Assert.Equal("""{"name":"new","status":"active"}""", post.Body);
-		Assert.Equal("application/vnd.example.v2+json, application/vnd.example.errors.v1+json", string.Join(", ", post.Request.Headers.Accept));
+		Assert.Equal("application/vnd.example.v2+json", Assert.Single(post.Request.Headers.Accept).ToString());
 	}
 }

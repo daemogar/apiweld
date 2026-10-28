@@ -17,6 +17,12 @@ public class ApiClientOptions
 	public VersionMismatchBehavior VersionMismatch { get; set; } = VersionMismatchBehavior.Throw;
 
 	/// <summary>
+	/// Sends the error media types in <c>Accept</c> after the success one. Off by default, since some
+	/// servers refuse any <c>Accept</c> with more than one value. See README.md, "Version checking".
+	/// </summary>
+	public bool AcceptErrorMediaTypes { get; set; }
+
+	/// <summary>
 	/// Extra requests one failed page of a walk may spend narrowing the failure to the record behind it;
 	/// 0 turns narrowing off, and the failure is thrown as it is. Each halving costs two, so 32 narrows a
 	/// page of up to 65,536 records. See README.md, "Page walking".

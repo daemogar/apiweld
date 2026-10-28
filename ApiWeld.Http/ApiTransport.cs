@@ -48,6 +48,9 @@ public sealed partial class ApiTransport
 			if (operation.Accept is { } accept)
 				AddHeader(request, "Accept", accept);
 
+			if (ClientOptions.AcceptErrorMediaTypes && operation.ErrorMediaTypes is { } errorTypes)
+				AddHeader(request, "Accept", errorTypes);
+
 			if (body is not null)
 				AddHeader(request, "Content-Type", operation.ContentType ?? "application/json");
 

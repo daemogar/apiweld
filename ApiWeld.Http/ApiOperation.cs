@@ -17,8 +17,11 @@ public sealed record ApiPaging(string? Offset, string? Limit, string TotalHeader
 /// <summary>One generated operation, described as data.</summary>
 public sealed record ApiOperation(HttpMethod Method, string Template)
 {
-	/// <summary>The <c>Accept</c> header value: the pinned success media type plus the error media types.</summary>
+	/// <summary>The <c>Accept</c> header value: the pinned success media type alone.</summary>
 	public string? Accept { get; init; }
+
+	/// <summary>The declared error media types, added to <c>Accept</c> only when <see cref="ApiClientOptions.AcceptErrorMediaTypes"/> is set.</summary>
+	public string? ErrorMediaTypes { get; init; }
 
 	/// <summary>The request body's media type.</summary>
 	public string? ContentType { get; init; }

@@ -33,6 +33,13 @@
 
 ### Fixed
 
+- `ApiWeld.Http` and `ApiWeld.Generator`: `Accept` carries only the pinned success media type.
+  Listing the error media types after it made servers that refuse a multi-value `Accept` answer
+  every request with 405. Generated operations now carry the error types as `ErrorMediaTypes`,
+  sent only when `ApiClientOptions.AcceptErrorMediaTypes` is set. See the README's "Version
+  checking".
+- `ApiWeld.Http`: the version check reads an `X-Media-Type` header when `Content-Type` names no
+  version, so a server that answers plain `application/json` still has its version checked.
 - `ApiWeld.Http`: a lone JSON object where a list is declared reads as a one-item list instead
   of failing the response.
 - `ApiWeld.Http`: dates and times read leniently, in ISO 8601 extended or basic form or as

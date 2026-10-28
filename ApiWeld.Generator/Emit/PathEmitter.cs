@@ -115,6 +115,9 @@ internal static class PathEmitter
 		if (operation.Accept is { } accept)
 			writer.Line($"Accept = {CodeWriter.Literal(accept)},");
 
+		if (operation.ErrorMediaTypes is { } errorTypes)
+			writer.Line($"ErrorMediaTypes = {CodeWriter.Literal(errorTypes)},");
+
 		if (operation.ContentType is { } contentType)
 			writer.Line($"ContentType = {CodeWriter.Literal(contentType)},");
 
