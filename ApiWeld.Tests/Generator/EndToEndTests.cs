@@ -39,9 +39,10 @@ public class EndToEndTests
 				var created = await api.Widgets.V2.PostAsync(new WidgetV2Request { Name = "new", Status = WidgetV2StatusRequest.Active });
 				var parts = await api.Widgets["w-1"].Parts.V1.GetAsync();
 				var gadgets = await api.Gadgets.V0.GetAsync();
+				var gadget = await api.Gadgets["g"].V0.GetAsync();
 				await api.Widgets["w-1"].V2.DeleteAsync();
 
-				return string.Join("|", all.Count, page.Items.Count, page.Total, streamed, created?.Name, created?.Status, parts.Count, gadgets.Count);
+				return string.Join("|", all.Count, page.Items.Count, page.Total, streamed, created?.Name, created?.Status, parts.Count, gadgets.Count, gadget.Count);
 			}
 		}
 		""";
@@ -75,7 +76,7 @@ public class EndToEndTests
 		if (request.Method == HttpMethod.Get && path == "/api/widgets/w-1/parts")
 			return FakeHandler.Json("""[ { "sku": "a", "quantity": 1 }, { "sku": "b", "quantity": "2" } ]""", "application/vnd.example.v1+json");
 
-		if (request.Method == HttpMethod.Get && path == "/api/gadgets")
+		if (request.Method == HttpMethod.Get && path is "/api/gadgets" or "/api/gadgets/g")
 			return FakeHandler.Json("""[ { "code": "g" } ]""");
 
 		if (request.Method == HttpMethod.Delete && path == "/api/widgets/w-1")
@@ -98,7 +99,8 @@ public class EndToEndTests
 		var server = Server();
 		var run = (Task<string>)assembly!.GetType("Example.Driver")!.GetMethod("RunAsync")!.Invoke(null, [server.Client()])!;
 
-		Assert.Equal("3|2|3|3|new|active|2|1", await run);
+		Assert.Equal("3|2|3|3|new|active|2|1|1", await run);
+		Assert.Single(server.Requests, r => r.Request.RequestUri!.AbsolutePath == "/api/gadgets/g");
 
 		var list = server.Requests.First(r => r.Request.Method == HttpMethod.Get && r.Request.RequestUri!.AbsolutePath == "/api/widgets").Request;
 		Assert.Equal("application/vnd.example.v2+json, application/vnd.example.errors.v1+json", string.Join(", ", list.Headers.Accept));
