@@ -58,7 +58,9 @@ public sealed partial class ApiTransport
 		if (operation.Version is null)
 			return;
 
-		var received = MediaTypeVersion.Read(response.Content.Headers.ContentType?.ToString());
+		// Some servers answer plain JSON and name the versioned media type in a header of its own.
+		var received = MediaTypeVersion.Read(response.Content.Headers.ContentType?.ToString())
+			?? MediaTypeVersion.Read(response.Headers.TryGetValues("X-Media-Type", out var named) ? named.FirstOrDefault() : null);
 
 		if (received is null || received == operation.Version)
 			return;

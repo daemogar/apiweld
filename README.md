@@ -329,10 +329,12 @@ with more than one value, even with a lower `q` on the extras. An error body arr
 them, and its type is chosen from the operation's declared error responses. A server that needs
 them listed can have them by setting `AcceptErrorMediaTypes` to `true`.
 
-When a success response's `Content-Type` carries a *different* version, the runtime throws
+When a success response carries a *different* version, the runtime throws
 `MediaTypeMismatchException` naming both, rather than reading a payload the models were not
-generated for. A response that names no version is read as normal. Setting `VersionMismatch` to
-`Warn` logs a warning instead of throwing.
+generated for. The version is read from `Content-Type`, or from an `X-Media-Type` header when
+`Content-Type` names none, since some servers answer plain `application/json` and name the
+versioned media type there. A response that names no version in either place is read as
+normal. Setting `VersionMismatch` to `Warn` logs a warning instead of throwing.
 
 A non-2xx response throws `ApiResponseException`. When the description declares a body for that
 status, the exception is the generic `ApiResponseException<TError>` with the body read into
