@@ -279,6 +279,21 @@ consumer's own half declares one (see "Registration"). Hand-written operations g
 parts of the same partial class and reach the generated navigation through its `internal` `Api`
 property — for example `Api.Widgets[id].V2.GetAsync(cancellationToken)`.
 
+### The starter client
+
+So a new client builds straight away, `apiweld generate` also writes a starter hand-written half,
+`Clients/{Client}.cs`, in a `Clients` folder beside `output` (with the default `output`, beside
+the manifest). It declares the constructor (see "Registration") and shows, in comments, how to
+register the client, which setting it needs, and what a hand-written operation looks like.
+
+The starter is written once, and only for a client that has no hand-written part yet. It is
+skipped when `Clients/{Client}.cs` exists, or when any `.cs` file beneath the manifest's folder
+declares `partial class {Client}` — files under `output`, and under `bin`, `obj` and folders
+whose names start with a dot, are not counted. It is also skipped when the `Clients` folder would
+lie outside the manifest's folder (an `output` of `.`). The starter carries no generated-file
+header, so the tool never rewrites or deletes it; it is the consumer's file from the start. A
+starter that cannot be written is reported as a warning, and generation still succeeds.
+
 ## The runtime
 
 `ApiWeld.Http` is the package generated clients reference. Generated code describes each
