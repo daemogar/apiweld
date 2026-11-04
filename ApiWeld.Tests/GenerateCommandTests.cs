@@ -49,10 +49,67 @@ public class GenerateCommandTests : IDisposable
 		var (code, output, error) = Run("generate", Manifest(Valid));
 
 		Assert.Equal(0, code);
-		Assert.Equal("ExampleClient: wrote 19 files to Generated.", output.Trim());
+		Assert.StartsWith("ExampleClient: wrote 19 files to Generated.", output);
 		Assert.Contains("warning:", error);
 		Assert.True(File.Exists(Path.Combine(folder, "Generated", "ExampleClient.g.cs")));
 		Assert.True(File.Exists(Path.Combine(folder, "Generated", "Paths", "WidgetsItemParts.g.cs")));
+	}
+
+	string Starter => Path.Combine(folder, "Clients", "ExampleClient.cs");
+
+	[Fact]
+	public void Writes_a_starter_client_that_compiles_with_the_generated_half()
+	{
+		CopyFixtures();
+
+		var (code, output, _) = Run("generate", Manifest(Valid));
+
+		Assert.Equal(0, code);
+		Assert.EndsWith($"ExampleClient: wrote a starter for its hand-written half to {Path.Combine("Clients", "ExampleClient.cs")}.", output.Trim());
+
+		var sources = Generated().Select(file => (file.Path, file.Text)).Append((Starter, File.ReadAllText(Starter)));
+		var (_, diagnostics) = Compiler.Compile(sources);
+
+		Assert.Empty(diagnostics);
+	}
+
+	[Fact]
+	public void Leaves_an_existing_starter_alone()
+	{
+		CopyFixtures();
+		var manifest = Manifest(Valid);
+		Run("generate", manifest);
+		File.WriteAllText(Starter, "// edited");
+
+		var (_, output, _) = Run("generate", manifest);
+
+		Assert.Equal("// edited", File.ReadAllText(Starter));
+		Assert.DoesNotContain("starter", output);
+	}
+
+	[Fact]
+	public void Writes_no_starter_when_a_hand_written_part_exists_elsewhere()
+	{
+		CopyFixtures();
+		File.WriteAllText(Path.Combine(folder, "ExampleClient.cs"), "namespace Example;\n\npublic partial class ExampleClient;\n");
+
+		var (code, output, _) = Run("generate", Manifest(Valid));
+
+		Assert.Equal(0, code);
+		Assert.DoesNotContain("starter", output);
+		Assert.False(Directory.Exists(Path.Combine(folder, "Clients")));
+	}
+
+	[Fact]
+	public void Ignores_parts_in_build_folders_when_deciding()
+	{
+		CopyFixtures();
+		Directory.CreateDirectory(Path.Combine(folder, "obj"));
+		File.WriteAllText(Path.Combine(folder, "obj", "ExampleClient.cs"), "public partial class ExampleClient;\n");
+
+		Run("generate", Manifest(Valid));
+
+		Assert.True(File.Exists(Starter));
 	}
 
 	[Fact]

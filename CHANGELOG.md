@@ -30,6 +30,10 @@
   merge across files, named `{Root}{Version}{Path}{Request|Response}`; paged lists get
   `GetAsync`, `EnumerateAsync` and `GetPagedAsync`. Output is deterministic, and only files
   carrying the tool's own two-line header are ever replaced or deleted. See the README's "Generating a client".
+- `apiweld generate`: writes a starter hand-written half, `Clients/{Client}.cs` beside the output
+  folder, with the constructor and commented examples of registration and a hand-written
+  operation. It is written once, only when no hand-written part of the client exists, and never
+  changed afterwards. See the README's "The starter client".
 
 ### Fixed
 

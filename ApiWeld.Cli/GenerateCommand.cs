@@ -71,6 +71,13 @@ internal static class GenerateCommand
 
 		output.WriteLine($"{manifest.Client}: wrote {result.Files.Count} files to {manifest.Output}.");
 
+		var warnings = new List<Diagnostic>();
+
+		if (ClientScaffold.Write(baseDirectory, manifest, warnings) is { } starter)
+			output.WriteLine($"{manifest.Client}: wrote a starter for its hand-written half to {starter}.");
+
+		Report(warnings, error);
+
 		return 0;
 	}
 
